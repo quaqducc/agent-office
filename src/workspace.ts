@@ -42,12 +42,21 @@ export class WorkspaceStore {
     return this.list().find(w => w.id === id);
   }
 
+  /** Register a folder; a folder that is already registered keeps its id and takes the new name, if one is given. */
   add(path: string, name?: string): Workspace {
-    const abs = resolve(path);
-    if (!existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`${abs} is not a folder`);
+    // pasted paths often carry quotes ("Copy as path") or stray spaces
+    const cleaned = path.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+    const abs = resolve(cleaned);
+    if (!cleaned || !existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`${cleaned || "(empty)"} is not a folder`);
     const all = this.list();
     const found = all.find(w => w.path.toLowerCase() === abs.toLowerCase());
-    if (found) return found;
+    if (found) {
+      const label = name?.trim();
+      if (!label || label === found.name) return found;
+      const renamed = { ...found, name: label };
+      writeFileSync(this.file, JSON.stringify(all.map(w => (w.id === found.id ? renamed : w)), null, 2));
+      return renamed;
+    }
     const label = name?.trim() || abs.split(/[\\/]/).filter(Boolean).pop() || "workspace";
     const ws: Workspace = { id: `${slug(label)}-${createHash("sha1").update(abs.toLowerCase()).digest("hex").slice(0, 6)}`, name: label, path: abs };
     for (const d of ["runs", "sessions"]) mkdirSync(join(companyDir(ws), d), { recursive: true });

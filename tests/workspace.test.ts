@@ -13,7 +13,7 @@ test("add is idempotent and creates .company folders", () => {
   const store = new WorkspaceStore(tmp("data-"));
   const folder = tmp("proj-");
   const a = store.add(folder, "MMO Shop");
-  const b = store.add(folder + "/", "other name");
+  const b = store.add(folder + "/");
   assert.equal(a.id, b.id);
   assert.match(a.id, /^mmo-shop-[0-9a-f]{6}$/);
   assert.equal(store.list().length, 1);
@@ -51,4 +51,23 @@ test("run index round-trips and updates by runId", () => {
 test("rejects missing folder", () => {
   const store = new WorkspaceStore(tmp("data-"));
   assert.throws(() => store.add(join(tmpdir(), "definitely-missing-xyz-123")), /not a folder/);
+});
+
+test("add accepts pasted paths with quotes or spaces", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-quoted-"));
+  const ws = store.add(`  "${folder}"  `, "Quoted");
+  assert.equal(ws.path, folder);
+  assert.equal(store.add(`'${folder}'`).id, ws.id, "same folder, same workspace");
+});
+
+test("adding an already registered folder with a new name renames it", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-rename-"));
+  const first = store.add(folder, "Old name");
+  const again = store.add(folder, "agent-company");
+  assert.equal(again.id, first.id);
+  assert.equal(again.name, "agent-company");
+  assert.equal(store.get(first.id)!.name, "agent-company");
+  assert.equal(store.add(folder).name, "agent-company", "no name given keeps the current one");
 });
