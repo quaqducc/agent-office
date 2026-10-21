@@ -64,10 +64,7 @@ export class WorkspaceStore {
     const found = all.find(w => w.path.toLowerCase() === abs.toLowerCase());
     if (found) {
       const label = name?.trim();
-      if (!label || label === found.name) return found;
-      const renamed = { ...found, name: label };
-      writeFileSync(this.file, JSON.stringify(all.map(w => (w.id === found.id ? renamed : w)), null, 2));
-      return renamed;
+      return label ? this.rename(found.id, label) : found;
     }
     const label = name?.trim() || abs.split(/[\\/]/).filter(Boolean).pop() || "workspace";
     const ws: Workspace = { id: `${slug(label)}-${createHash("sha1").update(abs.toLowerCase()).digest("hex").slice(0, 6)}`, name: label, path: abs };

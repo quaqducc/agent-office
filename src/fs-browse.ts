@@ -45,6 +45,7 @@ export function browseDirectory(targetPath?: string, readdir: typeof readdirSync
   if (!statSync(current).isDirectory()) throw new Error("not a folder");
 
   const parent = resolve(current) === resolve(dirname(current)) ? null : dirname(current);
+  const isRoot = parent === null || roots.some(r => resolve(r).toLowerCase() === resolve(current).toLowerCase());
 
   const folders: { name: string; path: string }[] = [];
   let error: string | undefined;
@@ -52,7 +53,8 @@ export function browseDirectory(targetPath?: string, readdir: typeof readdirSync
   try {
     const entries = readdir(current, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name.startsWith(".") || SYSTEM_DIRS.has(entry.name.toLowerCase())) continue;
+      if (entry.name.startsWith(".")) continue;
+      if (isRoot && SYSTEM_DIRS.has(entry.name.toLowerCase())) continue;
       let isDir = false;
       try {
         if (entry.isDirectory()) {

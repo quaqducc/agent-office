@@ -489,6 +489,7 @@ async function addWorkspace() {
           </button>
         `).join("")}
       </div>
+      <small class="ws-browse-hint">Bấm để chọn · Bấm đúp để mở</small>
 
       <div class="ws-form-fields">
         <label class="field">

@@ -100,8 +100,8 @@ test("fs endpoints: drives and browse directory", async () => {
     const base = tmp("fs-browse-");
     mkdirSync(join(base, "sub1"));
     mkdirSync(join(base, "sub2"));
+    mkdirSync(join(base, "dev"));
     mkdirSync(join(base, ".hidden"));
-    mkdirSync(join(base, "Windows"));
     writeFileSync(join(base, "file.txt"), "hello");
 
     const res = await api("POST", "/fs/browse", { path: base });
@@ -111,9 +111,9 @@ test("fs endpoints: drives and browse directory", async () => {
     const names = res.json.folders.map((f: any) => f.name);
     assert.ok(names.includes("sub1"));
     assert.ok(names.includes("sub2"));
+    assert.ok(names.includes("dev"), "regular subfolder named dev must NOT be hidden");
     assert.ok(!names.includes("file.txt"), "files must NOT be returned");
     assert.ok(!names.includes(".hidden"), "hidden folders must be skipped");
-    assert.ok(!names.includes("Windows"), "system folders must be skipped");
 
     const missing = await api("POST", "/fs/browse", { path: join(base, "not-exist-xyz") });
     assert.equal(missing.status, 404);
