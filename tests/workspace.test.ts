@@ -86,3 +86,39 @@ test("rename updates workspace name and persists", () => {
   assert.throws(() => store.rename("unknown-id-123", "Valid"), /unknown workspace/);
 });
 
+test("config and saveConfig persist template, rooms and enforce invariants", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-cfg-"));
+  const ws = store.add(folder, "Cfg WS");
+
+  // Initial config has no template or rooms
+  const initial = store.config(ws);
+  assert.equal(initial.template, undefined);
+  assert.equal(initial.rooms, undefined);
+  assert.ok(initial.roles.includes("manager"));
+
+  // Save config with template and rooms, with duplicates and unassigned roles
+  store.saveConfig(ws, {
+    template: "startup-mvp",
+    roles: ["researcher", "critic"], // manager omitted intentionally
+    rooms: [
+      { id: "r1", name: "Room 1", roles: ["researcher", "critic"] },
+      { id: "r2", name: "Room 2", roles: ["critic"] }, // duplicate critic
+    ],
+  });
+
+  const updated = store.config(ws);
+  assert.equal(updated.template, "startup-mvp");
+  // Invariant 1: manager is always present
+  assert.ok(updated.roles.includes("manager"));
+  assert.ok(updated.rooms);
+  assert.equal(updated.rooms!.length, 2);
+
+  // Invariant 2: critic is only in r1, not duplicated in r2
+  assert.deepEqual(updated.rooms![0].roles, ["researcher", "critic", "manager"]); // manager was unassigned, pushed to first room
+  assert.deepEqual(updated.rooms![1].roles, []);
+
+  // Limits preserved
+  assert.ok(updated.limits.maxDepth > 0);
+});
+

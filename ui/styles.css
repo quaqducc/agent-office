@@ -758,6 +758,50 @@ h1, h2, h3 { margin: 0; }
   .tabs .ico { display: none; }
   .tabs button { padding: 6px 4px; }
 }
+/* Office customization dialog */
+.office-dialog-body { display: grid; gap: 18px; }
+.office-sec { display: grid; gap: 10px; }
+.office-sec-title { font-size: 14px; font-weight: 600; color: var(--ink); margin: 0; }
+.office-sec-header { display: flex; justify-content: space-between; align-items: center; }
+.office-templates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.office-tpl-card {
+  border: 1px solid var(--line-2); border-radius: 8px; padding: 12px; background: var(--panel);
+  cursor: pointer; display: flex; flex-direction: column; gap: 8px; transition: border-color .15s, background .15s;
+}
+.office-tpl-card:hover { border-color: var(--line-3); background: var(--panel-2); }
+.office-tpl-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.tpl-head { display: grid; gap: 4px; }
+.tpl-title { display: flex; align-items: center; justify-content: space-between; }
+.tpl-name { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.tpl-desc { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.tpl-rooms { display: flex; flex-wrap: wrap; gap: 4px; }
+.office-rooms-list { display: grid; gap: 8px; }
+.office-room-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line-2);
+  border-radius: 8px; background: var(--panel);
+}
+.room-title-col { display: flex; align-items: center; gap: 6px; flex: 0 0 220px; }
+.room-num { font-weight: 600; color: var(--muted); font-size: 13px; }
+.room-name-input { flex: 1; padding: 4px 8px; font-size: 13px; }
+.room-roles-summary { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; align-items: center; }
+.role-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px;
+  background: var(--panel-2); font-size: 12px; border: 1px solid var(--line-2);
+}
+.role-chip svg { width: 14px; height: 14px; }
+.office-roles-list { display: grid; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
+.office-role-row {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;
+  border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel);
+}
+.office-role-row.active { border-color: var(--line-3); }
+.role-check-col { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.role-avatar { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+.role-meta-col { display: flex; align-items: center; gap: 6px; }
+.role-name { font-size: 13px; font-weight: 500; }
+.role-action-col { display: flex; align-items: center; gap: 8px; }
+.select-room { padding: 4px 8px; font-size: 12.5px; width: 180px; }
+
 @media (max-width: 1280px) {
   .brand-name { font-size: 26px; }
   .menu-text b { max-width: 160px; }

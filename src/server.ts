@@ -14,6 +14,7 @@ import { createPiRunnerFactory } from "./pi-runner.ts";
 import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
 import { browseDirectory, getDrives } from "./fs-browse.ts";
+import { OFFICE_TEMPLATES } from "./offices.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -22,12 +23,17 @@ export interface ServerOptions {
   createRunner?: (ws: Workspace, router: () => Router) => RunnerFactory;
 }
 
-/** `roles`: the installed roles when the context was built; a context is rebuilt once they change and it is idle. */
-interface Ctx { ws: Workspace; log: EventLog; router: Router; roles: string }
+/** `sig`: signature of installed roles, workspace roles and rooms; rebuilt when changed and idle. */
+interface Ctx { ws: Workspace; log: EventLog; router: Router; sig: string }
 
 class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  extra?: Record<string, any>;
+  constructor(status: number, message: string, extra?: Record<string, any>) {
+    super(message);
+    this.status = status;
+    this.extra = extra;
+  }
 }
 
 /** Browser origins allowed to call the API (none by default; the office UI's origin goes here). */
@@ -61,12 +67,13 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   const sse = new Set<{ res: ServerResponse; workspaceId?: string }>();
 
   function ctxFor(id: string): Ctx {
-    const existing = ctxs.get(id);
-    // roles installed or removed in the store: rebuild the team once the workspace is idle
-    if (existing && (existing.roles === roleIds().join(",") || existing.router.activeRunId())) return existing;
     const ws = store.get(id);
     if (!ws) throw new HttpError(404, `unknown workspace ${id}`);
     const cfg = store.config(ws);
+    const sig = `${roleIds().join(",")}:${cfg.roles.join(",")}:${JSON.stringify(cfg.rooms ?? [])}`;
+    const existing = ctxs.get(id);
+    // roles installed/removed or workspace team/rooms changed: rebuild once idle
+    if (existing && (existing.sig === sig || existing.router.activeRunId())) return existing;
     const log = new EventLog(runsDir(ws), ws.id);
     let router!: Router;
     const getRouter = () => router;
@@ -88,7 +95,7 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       const frame = `data: ${JSON.stringify(e)}\n\n`;
       for (const c of sse) if (!c.workspaceId || c.workspaceId === e.workspaceId) c.res.write(frame);
     });
-    const ctx = { ws, log, router, roles: roleIds().join(",") };
+    const ctx = { ws, log, router, sig };
     ctxs.set(id, ctx);
     return ctx;
   }
@@ -183,6 +190,9 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     if (m === "GET" && url.pathname === "/roles") {
       return json(200, roleIds().map(id => { const r = loadRole(id); return { id, name: r.meta.name, description: r.meta.description, owns: r.meta.owns }; }));
     }
+    if (m === "GET" && url.pathname === "/offices") {
+      return json(200, OFFICE_TEMPLATES);
+    }
     if (m === "GET" && url.pathname === "/fs/drives") {
       return json(200, getDrives());
     }
@@ -229,6 +239,21 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
           throw new HttpError(400, msg);
         }
       }
+      if (m === "PUT" && parts[2] === "config") {
+        const ws = store.get(parts[1]);
+        if (!ws) throw new HttpError(404, `unknown workspace ${parts[1]}`);
+        const b = await body(req);
+        if (!Array.isArray(b.roles)) throw new HttpError(400, "roles must be an array");
+        const installed = roleIds();
+        const missing = b.roles.filter((r: string) => !installed.includes(r));
+        if (missing.length > 0) throw new HttpError(400, `uninstalled roles: ${missing.join(", ")}`, { missing });
+        const cfg = store.saveConfig(ws, { roles: b.roles, rooms: b.rooms, template: b.template });
+        const existing = ctxs.get(parts[1]);
+        if (existing && !existing.router.activeRunId()) {
+          ctxFor(parts[1]);
+        }
+        return json(200, cfg);
+      }
       const ctx = ctxFor(parts[1]);
       if (m === "GET" && parts[2] === "runs") return json(200, store.runs(ctx.ws));
       if (m === "GET" && parts[2] === "config") return json(200, store.config(ctx.ws));
@@ -266,7 +291,9 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     handle(req, res).catch(e => {
       const status = e instanceof HttpError || e instanceof StoreError ? e.status : 500;
       if (!res.headersSent) res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: (e as Error).message }));
+      const payload: any = { error: (e as Error).message };
+      if (e instanceof HttpError && e.extra) Object.assign(payload, e.extra);
+      res.end(JSON.stringify(payload));
     });
   });
   await new Promise<void>((resolve, reject) => {

@@ -34,6 +34,7 @@
     <div class="spacer"></div>
     <span id="conn" class="conn" role="status" hidden>Mất kết nối, đang thử lại…</span>
     <button id="stop-run" class="btn danger-soft" type="button" hidden><i data-icon="stop"></i>Dừng lần chạy</button>
+    <button id="open-office" class="btn" type="button"><i data-icon="layout"></i><span class="btn-text">Văn phòng</span></button>
     <button id="open-store" class="btn" type="button"><i data-icon="store"></i><span class="btn-text">Kho role</span></button>
     <button id="open-settings" class="icon-btn" type="button" aria-label="Cài đặt" title="Cài đặt"><i data-icon="gear"></i></button>
   </header>
@@ -122,6 +123,7 @@
   <dialog id="setup" class="ask sheet setup" aria-label="Kết nối model AI"></dialog>
   <dialog id="settings" class="ask sheet"></dialog>
   <dialog id="store" class="ask sheet wide"></dialog>
+  <dialog id="office-dialog" class="ask sheet wide"></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script type="module" src="/ui/js/app.js"></script>

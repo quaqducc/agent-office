@@ -1,6 +1,6 @@
 // Static office backdrop as one SVG in scene pixels: floors, walls, windows, signs and furniture.
 // Colours come from CSS classes (styles.css → .scene-*), so light/dark themes restyle it.
-import { SCENE, ZONES } from "./layout.js";
+import { getRoomBoxes, SCENE, ZONES } from "./layout.js";
 import { esc } from "./util.js";
 
 const r = (x, y, w, h, cls, extra = "") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${cls}"${extra}/>`;
@@ -64,9 +64,57 @@ function sign(x, y, text) {
   return `<g class="sign">${r(x, y, w, 24, "s-sign", ' rx="3"')}<text x="${x + w / 2}" y="${y + 18}" class="s-sign-text" text-anchor="middle">${esc(text)}</text></g>`;
 }
 
-/** @param {{zones: Set<string>}} opts zones that have desks (the specialists corner becomes a lounge when empty) */
-export function sceneSvg({ zones }) {
+/** @param {{zones: Set<string>, rooms?: {id:string, name:string, roles:string[]}[]}} opts */
+export function sceneSvg({ zones, rooms }) {
   const { w: W, h: H } = SCENE;
+  if (rooms && rooms.length > 0) {
+    const n = Math.min(6, Math.max(1, rooms.length));
+    const activeRooms = rooms.slice(0, n);
+    const boxes = getRoomBoxes(n);
+    const patterns = ["p-carpet-g", "p-carpet-b", "p-tile", "p-carpet-g", "p-carpet-b", "p-tile"];
+    let s = `<svg class="scene-bg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" shape-rendering="crispEdges" aria-hidden="true">${PATTERNS}`;
+    // floors
+    s += `<rect width="${W}" height="${H}" fill="url(#p-wood)"/>`;
+    activeRooms.forEach((rm, i) => {
+      const [x, y, w, h] = boxes[i];
+      s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${patterns[i % patterns.length]})"/>`;
+      s += r(x + 10, y + 15, w - 20, h - 25, "s-rug", ' rx="6"');
+      s += r(x + 16, y + 21, w - 32, h - 37, "s-rug-in", ' rx="4"');
+    });
+    s += r(600, 672, 80, 30, "s-mat", ' rx="4"') + r(606, 678, 68, 18, "s-mat-in", ' rx="2"');
+    // outer north wall with windows
+    s += r(0, 0, W, 10, "s-cap") + r(0, 10, W, 38, "s-face") + r(0, 46, W, 2, "s-base");
+    s += windowAt(180, 84) + windowAt(480, 120) + windowAt(800, 120) + windowAt(1100, 84);
+    // bottom wall separating rooms from lobby
+    s += hWall(12, W - 12, 470, [600, 680]);
+    if (n >= 4) {
+      s += hWall(12, W - 12, 254, [600, 680]);
+    }
+    if (n === 2 || n === 4) {
+      s += r(635, 48, 10, 422, "s-cap");
+    } else if (n === 3 || n === 6) {
+      s += r(424, 48, 10, 422, "s-cap") + r(846, 48, 10, 422, "s-cap");
+    } else if (n === 5) {
+      s += r(424, 48, 10, 206, "s-cap") + r(846, 48, 10, 206, "s-cap");
+      s += r(635, 264, 10, 206, "s-cap");
+    }
+    // outer walls
+    s += r(0, 0, 12, H, "s-cap") + r(W - 12, 0, 12, H, "s-cap") + r(0, H - 12, 600, 12, "s-cap") + r(680, H - 12, W - 680, 12, "s-cap");
+    s += r(600, H - 12, 80, 12, "s-door");
+    // signs on wall faces
+    activeRooms.forEach((rm, i) => {
+      const [x, y] = boxes[i];
+      s += sign(x + 16, y > 100 ? y + 6 : 17, rm.name);
+    });
+    // lobby & furniture
+    s += plant(570, 700, true) + plant(710, 700, true);
+    s += `<g class="prop">${r(1100, 500, 156, 34, "s-counter")}${r(1100, 530, 156, 6, "s-counter-dark")}${r(1116, 488, 22, 26, "s-machine")}${r(1120, 494, 14, 6, "s-machine-light")}${r(1150, 496, 10, 10, "s-mug")}${r(1168, 498, 10, 8, "s-mug-2")}</g>`;
+    s += `<g class="prop">${r(1052, 494, 24, 14, "s-water")}${r(1050, 508, 28, 34, "s-cooler")}</g>`;
+    s += table(990, 600, 110, 50) + sofa(980, 670, 130) + plant(1246, 700) + plant(860, 700);
+    s += shelf(30, 486, 150) + sofa(80, 610, 170) + table(110, 570, 110, 28) + plant(420, 700) + plant(36, 700);
+    return s + "</svg>";
+  }
+
   const z = id => ZONES.find(q => q.id === id);
   const floor = (id, fill) => { const [x, y, w, h] = z(id).box; return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${fill})"/>`; };
   const specialists = zones.has("specialists");

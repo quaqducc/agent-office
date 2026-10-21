@@ -88,6 +88,52 @@ test("renames workspace via PATCH /workspaces/:id", async () => {
   } finally { await srv.close(); }
 });
 
+test("offices endpoint and PUT /workspaces/:id/config", async () => {
+  const { srv, api } = await setup(async () => "ok");
+  try {
+    const offices = await api("GET", "/offices");
+    assert.equal(offices.status, 200);
+    assert.ok(Array.isArray(offices.json));
+    assert.equal(offices.json.length, 4);
+    for (const t of offices.json) {
+      assert.ok(t.id && t.name && t.desc);
+      assert.ok(Array.isArray(t.roles) && t.roles.includes("researcher"));
+      assert.ok(Array.isArray(t.rooms) && t.rooms.length > 0);
+    }
+
+    const ws = (await api("POST", "/workspaces", { path: tmp("ws-cfg-") })).json;
+
+    // Reject uninstalled roles with missing list
+    const uninstalled = await api("PUT", `/workspaces/${ws.id}/config`, { roles: ["manager", "super-agent-xyz"] });
+    assert.equal(uninstalled.status, 400);
+    assert.ok(uninstalled.json.missing?.includes("super-agent-xyz"));
+
+    // Reject unknown workspace
+    const unknownWs = await api("PUT", "/workspaces/unknown-ws-123/config", { roles: ["manager"] });
+    assert.equal(unknownWs.status, 404);
+
+    // Save valid config
+    const valid = await api("PUT", `/workspaces/${ws.id}/config`, {
+      template: "startup-mvp",
+      roles: ["manager", "developer", "researcher", "critic"],
+      rooms: [
+        { id: "exec", name: "Ban Giám Đốc", roles: ["manager"] },
+        { id: "team", name: "Nhóm Dự Án", roles: ["developer", "researcher", "critic"] },
+      ],
+    });
+    assert.equal(valid.status, 200);
+    assert.equal(valid.json.template, "startup-mvp");
+    assert.deepEqual(valid.json.roles, ["manager", "developer", "researcher", "critic"]);
+    assert.equal(valid.json.rooms?.length, 2);
+
+    // GET /workspaces/:id/config returns the saved configuration
+    const fetched = await api("GET", `/workspaces/${ws.id}/config`);
+    assert.equal(fetched.status, 200);
+    assert.equal(fetched.json.template, "startup-mvp");
+    assert.deepEqual(fetched.json.rooms, valid.json.rooms);
+  } finally { await srv.close(); }
+});
+
 test("fs endpoints: drives and browse directory", async () => {
   const { srv, api } = await setup(async () => "ok");
   try {

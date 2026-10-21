@@ -34,3 +34,63 @@ test("deskLayout groups by department and only includes given roles", () => {
   const spots = new Set(twelve.map((d: any) => `${Math.round(d.x)}:${Math.round(d.y)}`));
   assert.equal(spots.size, 13, "no two desks overlap");
 });
+
+test("deskLayout dynamic rooms: 1 room, 3 rooms, 6 rooms and fallback", () => {
+  // 1 room
+  const r1 = [
+    { id: "all-in-one", name: "Toàn Đội", roles: ["manager", "developer", "researcher"] },
+  ];
+  const d1 = deskLayout(["manager", "developer", "researcher"], r1);
+  assert.equal(d1.length, 3);
+  for (const d of d1) {
+    assert.equal(d.dept, "Toàn Đội");
+    assert.equal(d.zone, "all-in-one");
+    assert.ok(d.px >= 12 && d.px <= 1268, `px ${d.px} inside scene width`);
+    assert.ok(d.py >= 48 && d.py <= 470, `py ${d.py} inside room height`);
+  }
+  const s1 = new Set(d1.map((d: any) => `${d.px}:${d.py}`));
+  assert.equal(s1.size, 3, "1 room: no two desks overlap");
+
+  // 3 rooms
+  const r3 = [
+    { id: "exec", name: "Điều Hành", roles: ["manager"] },
+    { id: "eng", name: "Kỹ Thuật", roles: ["developer", "reviewer"] },
+    { id: "res", name: "Nghiên Cứu", roles: ["researcher", "critic"] },
+  ];
+  const d3 = deskLayout(["manager", "developer", "reviewer", "researcher", "critic"], r3);
+  assert.equal(d3.length, 5);
+  for (const d of d3) {
+    assert.ok(d.px >= 12 && d.px <= 1268);
+    assert.ok(d.py >= 48 && d.py <= 470);
+  }
+  const s3 = new Set(d3.map((d: any) => `${d.px}:${d.py}`));
+  assert.equal(s3.size, 5, "3 rooms: no two desks overlap");
+
+  // 6 rooms
+  const r6 = [
+    { id: "rm1", name: "Phòng 1", roles: ["manager"] },
+    { id: "rm2", name: "Phòng 2", roles: ["architect"] },
+    { id: "rm3", name: "Phòng 3", roles: ["developer"] },
+    { id: "rm4", name: "Phòng 4", roles: ["reviewer"] },
+    { id: "rm5", name: "Phòng 5", roles: ["devops"] },
+    { id: "rm6", name: "Phòng 6", roles: ["researcher"] },
+  ];
+  const d6 = deskLayout(["manager", "architect", "developer", "reviewer", "devops", "researcher"], r6);
+  assert.equal(d6.length, 6);
+  for (const d of d6) {
+    assert.ok(d.px >= 12 && d.px <= 1268);
+    assert.ok(d.py >= 48 && d.py <= 470);
+  }
+  const s6 = new Set(d6.map((d: any) => `${d.px}:${d.py}`));
+  assert.equal(s6.size, 6, "6 rooms: no two desks overlap");
+
+  // Unassigned role moves to room 0
+  const dUnassigned = deskLayout(["manager", "developer", "critic"], [
+    { id: "exec", name: "Điều Hành", roles: ["manager"] },
+    { id: "dev", name: "Lập Trình", roles: ["developer"] },
+    // critic not assigned to any room
+  ]);
+  const criticDesk = dUnassigned.find((d: any) => d.role === "critic");
+  assert.ok(criticDesk);
+  assert.equal(criticDesk.zone, "exec", "unassigned role placed into first room");
+});

@@ -28,6 +28,7 @@ const P = {
   download: "M12 4v11M7 10l5 5 5-5M5 20h14",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
   sparkle:"M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6",
+  layout: "M3 3h18v18H3zM3 9h18M9 21V9",
 };
 
 /** Inline SVG markup for a named icon. */

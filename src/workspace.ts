@@ -16,7 +16,18 @@ export interface RunIndexEntry {
   tokens: number;
 }
 
-export interface WorkspaceConfig { roles: string[]; limits: Limits }
+export interface RoomDef {
+  id: string;
+  name: string;
+  roles: string[];
+}
+
+export interface WorkspaceConfig {
+  roles: string[];
+  limits: Limits;
+  template?: string;
+  rooms?: RoomDef[];
+}
 
 const slug = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workspace";
@@ -79,7 +90,55 @@ export class WorkspaceStore {
     const all = roleIds();
     const chosen: string[] = Array.isArray(raw.roles) ? raw.roles.filter((r: string) => all.includes(r)) : all;
     const roles = chosen.includes("manager") ? chosen : ["manager", ...chosen];
-    return { roles, limits: { ...DEFAULT_LIMITS, ...(raw.limits ?? {}) } };
+    const template = typeof raw.template === "string" ? raw.template : undefined;
+
+    let rooms: RoomDef[] | undefined;
+    if (Array.isArray(raw.rooms) && raw.rooms.length > 0) {
+      const validRooms: RoomDef[] = raw.rooms
+        .filter((rm: any) => rm && typeof rm.id === "string" && typeof rm.name === "string" && Array.isArray(rm.roles))
+        .map((rm: any) => ({
+          id: String(rm.id).trim() || "room",
+          name: String(rm.name).trim() || "Phòng",
+          roles: [] as string[],
+        }));
+
+      if (validRooms.length > 0) {
+        const assigned = new Set<string>();
+        for (let i = 0; i < validRooms.length; i++) {
+          const rawRoomRoles = raw.rooms[i]?.roles;
+          if (Array.isArray(rawRoomRoles)) {
+            for (const r of rawRoomRoles) {
+              if (roles.includes(r) && !assigned.has(r)) {
+                validRooms[i].roles.push(r);
+                assigned.add(r);
+              }
+            }
+          }
+        }
+        for (const r of roles) {
+          if (!assigned.has(r)) {
+            validRooms[0].roles.push(r);
+            assigned.add(r);
+          }
+        }
+        rooms = validRooms;
+      }
+    }
+
+    return { roles, limits: { ...DEFAULT_LIMITS, ...(raw.limits ?? {}) }, ...(template ? { template } : {}), ...(rooms ? { rooms } : {}) };
+  }
+
+  saveConfig(ws: Workspace, patch: { roles: string[]; rooms?: RoomDef[]; template?: string }): WorkspaceConfig {
+    const f = join(companyDir(ws), "config.json");
+    const raw = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
+    const updated: any = {
+      ...raw,
+      roles: patch.roles,
+    };
+    if (patch.rooms !== undefined) updated.rooms = patch.rooms;
+    if (patch.template !== undefined) updated.template = patch.template;
+    writeFileSync(f, JSON.stringify(updated, null, 2));
+    return this.config(ws);
   }
 
   /** Append or replace (by runId) a run summary. */

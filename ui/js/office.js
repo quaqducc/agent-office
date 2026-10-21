@@ -46,7 +46,8 @@ const BADGE = {
  */
 export function renderOffice(el, state, opts) {
   const roles = Object.keys(state.roles);
-  const key = roles.join(",");
+  const rooms = opts.rooms;
+  const key = `${roles.join(",")}:${JSON.stringify(rooms ?? [])}`;
   if (el.dataset.roles !== key) build(el, roles, opts);
   const links = state.runStatus === "active" ? activeLinks(state) : [];
   const chain = new Set(links.flatMap(l => [l.from, l.to]));
@@ -81,10 +82,11 @@ export function renderOffice(el, state, opts) {
 }
 
 function build(el, roles, opts) {
-  el.dataset.roles = roles.join(",");
-  const desks = deskLayout(roles);
+  const rooms = opts.rooms;
+  el.dataset.roles = `${roles.join(",")}:${JSON.stringify(rooms ?? [])}`;
+  const desks = deskLayout(roles, rooms);
   el.innerHTML = `<div class="scene" style="width:${SCENE.w}px;height:${SCENE.h}px">
-    ${sceneSvg({ zones: new Set(desks.map(d => d.zone)) })}
+    ${sceneSvg({ zones: new Set(desks.map(d => d.zone)), rooms })}
     <svg class="links" viewBox="0 0 ${SCENE.w} ${SCENE.h}" aria-hidden="true"><g class="trails"></g><g class="live"></g></svg>
     <div class="user-spot" style="left:${ENTRANCE.x}px;top:${ENTRANCE.y}px"><div class="halo"></div><div class="char">${sprite("user")}</div><div class="plate">Bạn</div></div>
     ${desks.map(d => `<button class="desk" type="button" data-role="${esc(d.role)}" data-status="idle" style="left:${d.px}px;top:${d.py}px">

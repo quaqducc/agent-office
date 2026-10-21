@@ -342,9 +342,11 @@ a per-role sandbox is the planned upgrade.
 | `GET /roles` | installed roles (`id, name, description, owns`) |
 | `GET /fs/drives` | list drive roots (`{roots, home}`) |
 | `POST /fs/browse` `{path?}` | browse folders only (`{current, parent, home, roots, folders, error?}`) |
+| `GET /offices` | preset office templates (`startup-mvp`, `software-house`, `content-marketing`, `research-lab`) |
 | `GET /workspaces` · `POST /workspaces {path, name?}` | list / register a workspace |
 | `PATCH /workspaces/:id {name}` | rename a workspace |
 | `GET /workspaces/:id/config` · `/runs` · `/approvals` | team + limits / run history / pending approvals |
+| `PUT /workspaces/:id/config` `{template?, roles?, rooms?, limits?}` | update workspace roles, template, and rooms (validates installed roles; rebuilds router context when idle) |
 | `POST /workspaces/:id/messages {text}` | message the Manager (starts or joins a run) |
 | `GET /runs/:runId/events` · `POST /runs/:runId/stop` | full event log of a run / stop a run |
 | `POST /checkpoints/:id/reply {decision: approve\|reject\|edit, note}` | the user's answer to an approval |
@@ -367,6 +369,10 @@ a per-role sandbox is the planned upgrade.
   (`app.gen`).
 - **Testing.** The pure modules (`state`, `derive`, `markdown`, `settings` helpers, `office`
   layout) are unit-tested under Node in `tests/ui-*.test.ts`. The DOM code is verified in a browser.
+- **Office customization & dynamic rooms (`layout.js`, `scene.js`, `office-dialog.js`).**
+  Workspaces support dynamic 1–6 room configurations and role assignments stored in `<workspace>/.company/config.json`.
+  Users can pick from preset templates (`/offices`) or customize rooms in the UI. `deskLayout` computes
+  desk coordinates dynamically per room without overlap while keeping the entrance and corridor at `y >= 480`.
 - **Rendering safety.** Model text is escaped (`util.esc`) or rendered with the safe Markdown
   wrapper: raw HTML shows as text, only http(s) links, no images.
 - **Look and copy.** Light and dark themes follow the system through CSS tokens at the top of

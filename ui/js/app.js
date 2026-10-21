@@ -11,6 +11,7 @@ import { renderApprovals, renderChat, renderDrawer, renderFeed, renderFlow, rend
 import { esc } from "./util.js";
 import { openSettings, showSetup } from "./settings.js";
 import { openStore } from "./store.js";
+import { openOfficeDialog } from "./office-dialog.js";
 
 const $ = sel => document.querySelector(sel);
 const el = {
@@ -20,6 +21,7 @@ const el = {
   stop: $("#stop-run"), conn: $("#conn"), replay: $("#replay-controls"), replayToggle: $("#replay-toggle"), replayBar: $("#replay-bar"),
   logRole: $("#log-role"), logType: $("#log-type"), logCount: $("#log-count"), flowCount: $("#flow-count"),
   form: $("#chat-form"), input: $("#chat-input"), drawer: $("#drawer"), drawerBody: $("#drawer-body"), ask: $("#ask"), toast: $("#toast"),
+  openOffice: $("#open-office"),
 };
 
 const app = {
@@ -30,6 +32,8 @@ const app = {
   runs: [],
   wsId: null,
   roles: [],
+  rooms: null,
+  template: null,
   live: null,          // live reducer state
   liveReady: false,
   buffer: [],          // SSE events received before the live state finished loading
@@ -131,7 +135,7 @@ function draw() {
   const s = current();
   if (!s) return;
   const readOnly = app.mode === "replay";
-  renderOffice(el.office, s, { names: app.names, selected: app.selected, onSelect: openDrawer });
+  renderOffice(el.office, s, { names: app.names, rooms: app.rooms, selected: app.selected, onSelect: openDrawer });
   const key = app.mode;
   if (s.effects.length < app.fxDone[key]) app.fxDone[key] = 0; // a new run reset the queue
   const speed = readOnly ? (app.replay.speed || Infinity) : 1;
@@ -190,7 +194,7 @@ function closeDrawer() {
 // ---------- workspaces & runs ----------
 function setRoles(roles) {
   app.roles = roles;
-  app.dept = Object.fromEntries(deskLayout(roles).map(d => [d.role, d.dept]));
+  app.dept = Object.fromEntries(deskLayout(roles, app.rooms).map(d => [d.role, d.dept]));
   el.logRole.innerHTML = `<option value="">Mọi người</option><option value="user">Bạn</option>` +
     roles.map(r => `<option value="${esc(r)}">${esc(app.names[r] ?? r)}</option>`).join("");
 }
@@ -259,6 +263,8 @@ async function openWorkspace(id) {
   renderWorkspaceMenu();
   const cfg = await api.config(id);
   if (gen !== app.gen) return;
+  app.rooms = cfg.rooms ?? null;
+  app.template = cfg.template ?? null;
   setRoles(cfg.roles);
   app.live = initialState(app.roles);
   app.liveReady = false;
@@ -676,6 +682,29 @@ $("#open-settings").addEventListener("click", () =>
   openSettings({ roles: Object.values(app.meta), version: app.version, toast, ask }));
 $("#open-store").addEventListener("click", () =>
   openStore({ toast, ask, onChange: () => reloadRoles().catch(e => toast(e.message, "bad")) }));
+$("#open-office")?.addEventListener("click", () => {
+  if (!app.wsId) {
+    toast("Vui lòng chọn hoặc tạo workspace trước", "bad");
+    return;
+  }
+  openOfficeDialog({
+    wsId: app.wsId,
+    toast,
+    openStore: () => openStore({ toast, ask, onChange: () => reloadRoles().catch(e => toast(e.message, "bad")) }),
+    onSave: updated => {
+      app.rooms = updated.rooms ?? null;
+      app.template = updated.template ?? null;
+      setRoles(updated.roles);
+      if (app.live) {
+        for (const r of updated.roles) {
+          if (!app.live.roles[r]) app.live.roles[r] = { status: "idle" };
+        }
+      }
+      if (el.office) el.office.dataset.roles = "";
+      draw();
+    },
+  });
+});
 
 el.drawer.addEventListener("click", ev => { if (ev.target === el.drawer) closeDrawer(); });
 el.drawer.querySelector(".drawer-close").addEventListener("click", closeDrawer);
