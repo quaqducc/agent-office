@@ -1,5 +1,5 @@
 // End-to-end smoke test against the real model (not part of `npm test`).
-// Run: company env (see company.cmd), then `node tests/e2e/smoke.ts`
+// Run: configure a model first (agent-company settings in ~/.agent-company), then `node tests/e2e/smoke.ts`
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";

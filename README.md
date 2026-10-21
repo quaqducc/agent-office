@@ -172,7 +172,7 @@ npm run check                # type-check
 node tests/e2e/ui-demo.ts    # offline office demo with a scripted team → http://127.0.0.1:4318
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Design notes are in `docs/superpowers/`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the architecture guide [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Design notes are in `docs/superpowers/`.
 
 ## License
 

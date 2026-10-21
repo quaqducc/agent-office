@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping! Issues and pull requests are welcome.
+Thanks for helping! Issues and pull requests are welcome. Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is organised.
 
 ## Setup
 
