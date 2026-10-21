@@ -3,7 +3,7 @@ import { Marked } from "/vendor/marked.js";
 import { createMarkdown } from "./markdown.js";
 import { api, subscribe } from "./api.js";
 import { initialState, mergeEvents, reduce } from "./state.js";
-import { cancelAllWalks, fit, playEffect, renderOffice } from "./office.js";
+import { cancelAllWalks, fit, pauseAllWalks, playEffect, renderOffice, resumeAllWalks } from "./office.js";
 import { deskLayout } from "./layout.js";
 import { icon } from "./icons.js";
 import { duration } from "./derive.js";
@@ -644,7 +644,14 @@ el.replayToggle.addEventListener("click", () => {
   if (r.i >= r.events.length) return startReplay(r.runId);
   r.paused = !r.paused;
   setToggle(r.paused ? "play" : "pause");
-  if (!r.paused) stepReplay(); else { clearTimeout(r.timer); render(); }
+  if (!r.paused) {
+    resumeAllWalks();
+    stepReplay();
+  } else {
+    clearTimeout(r.timer);
+    pauseAllWalks();
+    render();
+  }
 });
 document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b));

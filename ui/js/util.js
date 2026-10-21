@@ -30,8 +30,9 @@ export function summarize(e, names = {}) {
   }
 }
 
-/** One-line plain-text preview of Markdown: drops emphasis, heading/list/quote markers and table pipes. */
+/** One-line plain-text preview of Markdown: drops emphasis, heading/list/quote markers, links and table pipes. */
 export const plain = s => String(s ?? "")
+  .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
   .replace(/\*\*|__|`+|~~/g, "")
   .replace(/(^|\n)\s*(#{1,6}|>|[-*+]|\d+\.)\s+/g, "$1")
   .replace(/\|/g, " ")

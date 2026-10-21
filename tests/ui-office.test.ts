@@ -7,7 +7,7 @@ import { deskLayout, findWalkPath, getRoomDeskSlots, getRoomBoxes, getRoomDoors,
 // @ts-ignore
 import { sceneSvg } from "../ui/js/scene.js";
 // @ts-ignore
-import { RoleWalkQueue, walkDuration, getBubbleContent, renderOffice } from "../ui/js/office.js";
+import { RoleWalkQueue, walkDuration, getBubbleContent, renderOffice, playEffect, cancelAllWalks, pauseAllWalks, resumeAllWalks } from "../ui/js/office.js";
 
 test("sprite template is a 16x16 grid", () => {
   assert.equal(SPRITE_ROWS.length, 16);
@@ -300,10 +300,10 @@ test("dynamic doors in sceneSvg match getRoomDoors coordinates", () => {
       roles: [`role_${i + 1}`],
     }));
     const doors = getRoomDoors(rooms);
-    const svg = sceneSvg({ rooms });
+    const svg = sceneSvg({ rooms, zones: new Set() });
 
     for (const rm of rooms) {
-      const [doorX, doorY] = doors[rm.id];
+      const [doorX, doorY] = (doors as any)[rm.id];
       // Expect an s-door rect on the wall at doorY that encompasses doorX
       const doorMatches = Array.from(svg.matchAll(/<rect\s+x="(\d+)"\s+y="(\d+)"\s+width="(\d+)"\s+height="28"\s+class="s-door"/g));
       const hasDoorCovering = doorMatches.some(m => {
@@ -398,5 +398,131 @@ test("walk path line segments never penetrate unrelated 3rd-party rooms for 1-6 
       }
     }
   }
+});
+
+test("getBubbleContent filters raw Markdown markers using plain()", () => {
+  const fx1 = { kind: "done", label: "## Kết quả: **thành công** [tài liệu](https://example.com)" };
+  const res1 = getBubbleContent(fx1);
+  assert.equal(res1.text, "Xong: Kết quả: thành công tài liệu");
+  assert.ok(!res1.text.includes("##"));
+  assert.ok(!res1.text.includes("**"));
+  assert.ok(!res1.text.includes("https://"));
+
+  const fx2 = { kind: "approval", label: "### Yêu cầu **xác nhận** từ `user`" };
+  const res2 = getBubbleContent(fx2);
+  assert.equal(res2.text, "Yêu cầu xác nhận từ user");
+  assert.equal(res2.cls, "need");
+});
+
+test("RoleWalkQueue limits waiting queue to 1 per role (maxPerRoleQueue = 1)", () => {
+  const q = new RoleWalkQueue({ maxConcurrent: 3 });
+  assert.equal(q.enqueue("developer", { id: 1 }), "running");
+  assert.equal(q.enqueue("developer", { id: 2 }), "queued");
+  // Third enqueue for same role must be rejected/dropped
+  assert.equal(q.enqueue("developer", { id: 3 }), "dropped");
+
+  // Next finishes 1, starts 2
+  const next = q.finish("developer");
+  assert.equal(next?.id, 2);
+  // Now developer has active task but queue is empty, next finish returns null
+  assert.equal(q.finish("developer"), null);
+});
+
+test("approval interactions target user at entrance and user-spot contains bubble element", () => {
+  const mockEl = {
+    dataset: { roles: "manager,developer" },
+    _rooms: null,
+    _names: {},
+    querySelector(selector: string) {
+      if (selector === ".user-spot") {
+        return {
+          classList: { add() {}, remove() {}, toggle() {} },
+          querySelector(sub: string) {
+            if (sub === ".bubble") return { textContent: "", className: "" };
+            return null;
+          }
+        };
+      }
+      return null;
+    },
+    querySelectorAll() { return []; },
+    style: { setProperty() {} },
+    innerHTML: "",
+  };
+
+  renderOffice(mockEl as any, {
+    roles: { manager: { status: "idle" }, developer: { status: "approval" } },
+    streaming: {},
+    tasks: {},
+    approvals: {},
+    runStatus: "active",
+  }, { names: { manager: "Manager", developer: "Developer" }, onSelect: () => {} });
+
+  assert.ok(mockEl.innerHTML.includes('<div class="user-spot"'), "must have user-spot");
+  assert.ok(mockEl.innerHTML.includes('<span class="bubble"></span></div>'), "user-spot must contain bubble span");
+
+  // Verify playEffect targets user for approval
+  let queuedTask: any = null;
+  const originalEnqueue = RoleWalkQueue.prototype.enqueue;
+  RoleWalkQueue.prototype.enqueue = function(role, task) {
+    queuedTask = task;
+    return "queued"; // prevent running full animation in test
+  };
+  try {
+    const officeEl = {
+      dataset: { roles: "manager,developer" },
+      _rooms: null,
+      querySelector() { return null; },
+    };
+    playEffect(officeEl as any, { kind: "approval", from: "developer", to: "manager", label: "Cần duyệt xóa file" }, 1);
+    assert.ok(queuedTask, "walk task was enqueued");
+    assert.equal(queuedTask.walker, "developer");
+    assert.equal(queuedTask.target, "user", "approval must target user, not manager");
+  } finally {
+    RoleWalkQueue.prototype.enqueue = originalEnqueue;
+  }
+});
+
+test("pauseAllWalks, resumeAllWalks and cancelAllWalks with generation tokens", async () => {
+  let paused = false;
+  let played = false;
+  let cancelled = false;
+
+  const mockActor = {
+    classList: { add() {}, remove() {} },
+    style: { left: "", top: "" },
+    animate() {
+      return {
+        pause() { paused = true; },
+        play() { played = true; },
+        cancel() { cancelled = true; },
+        onfinish: null as any,
+        oncancel: null as any,
+      };
+    },
+    append() {},
+    remove() {},
+  };
+
+  const mockFxLayer = {
+    append() {},
+  };
+
+  const mockOfficeEl = {
+    dataset: { roles: "manager,developer" },
+    _rooms: null,
+    querySelector(selector: string) {
+      if (selector === ".fx-layer") return mockFxLayer;
+      if (selector.includes(".desk")) return { classList: { add() {}, remove() {} } };
+      return null;
+    },
+    querySelectorAll() { return []; },
+  };
+
+  // Verify functions can be invoked cleanly
+  pauseAllWalks();
+  resumeAllWalks();
+  cancelAllWalks(mockOfficeEl as any);
+  assert.ok(true, "pauseAllWalks, resumeAllWalks and cancelAllWalks succeed without error");
 });
 

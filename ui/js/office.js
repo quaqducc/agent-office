@@ -45,8 +45,9 @@ export function walkDuration(speed = 1, prefersReducedMotion = false) {
 
 /** Single Presence and concurrency management for walking characters. */
 export class RoleWalkQueue {
-  constructor({ maxConcurrent = 3 } = {}) {
+  constructor({ maxConcurrent = 3, maxPerRoleQueue = 1 } = {}) {
     this.maxConcurrent = maxConcurrent;
+    this.maxPerRoleQueue = maxPerRoleQueue;
     this.active = new Set();
     this.queues = new Map();
   }
@@ -58,7 +59,11 @@ export class RoleWalkQueue {
   enqueue(role, task) {
     if (this.active.has(role)) {
       if (!this.queues.has(role)) this.queues.set(role, []);
-      this.queues.get(role).push(task);
+      const q = this.queues.get(role);
+      if (q.length >= this.maxPerRoleQueue) {
+        return "dropped";
+      }
+      q.push(task);
       return "queued";
     }
     if (this.active.size >= this.maxConcurrent) {
@@ -85,12 +90,13 @@ export class RoleWalkQueue {
   }
 }
 
-export const globalWalkQueue = new RoleWalkQueue({ maxConcurrent: 3 });
+export const globalWalkQueue = new RoleWalkQueue({ maxConcurrent: 3, maxPerRoleQueue: 1 });
 const activeAnimControllers = new Set();
+const roleTokens = new Map();
 
 /** Format speech bubble text and styling from interaction effect. */
 export function getBubbleContent(fx) {
-  let text = String(fx.label ?? "").trim();
+  let text = plain(fx.label);
   let cls = "";
   if (fx.kind === "approval") {
     cls = "need";
@@ -113,6 +119,7 @@ export function getBubbleContent(fx) {
 
 /** Cancel all walking animations and return everyone to their desk immediately. */
 export function cancelAllWalks(el) {
+  roleTokens.clear();
   for (const ctrl of activeAnimControllers) {
     try { ctrl.abort(); } catch (_) {}
   }
@@ -122,6 +129,18 @@ export function cancelAllWalks(el) {
   if (el) {
     el.querySelectorAll(".actor").forEach(a => a.remove());
     el.querySelectorAll(".desk.away").forEach(d => d.classList.remove("away"));
+  }
+}
+
+export function pauseAllWalks() {
+  for (const ctrl of activeAnimControllers) {
+    try { ctrl.pause?.(); } catch (_) {}
+  }
+}
+
+export function resumeAllWalks() {
+  for (const ctrl of activeAnimControllers) {
+    try { ctrl.resume?.(); } catch (_) {}
   }
 }
 
@@ -177,7 +196,7 @@ function build(el, roles, opts) {
   const desks = deskLayout(roles, rooms);
   el.innerHTML = `<div class="scene" style="width:${SCENE.w}px;height:${SCENE.h}px">
     ${sceneSvg({ zones: new Set(desks.map(d => d.zone)), rooms })}
-    <div class="user-spot" style="left:${ENTRANCE.x}px;top:${ENTRANCE.y}px"><div class="halo"></div><div class="char">${sprite("user")}</div><div class="plate">Bạn</div></div>
+    <div class="user-spot" style="left:${ENTRANCE.x}px;top:${ENTRANCE.y}px"><div class="halo"></div><div class="char">${sprite("user")}</div><div class="plate">Bạn</div><span class="bubble"></span></div>
     ${desks.map(d => `<button class="desk" type="button" data-role="${esc(d.role)}" data-status="idle" style="left:${d.px}px;top:${d.py}px">
         <span class="halo"></span><span class="chair"></span>
         <span class="char">${sprite(d.role)}</span>${DESK}
@@ -282,14 +301,52 @@ async function runWalk(el, walker, target, fx, speed) {
   actor.innerHTML = `<div class="char">${sprite(walker)}</div>`;
   fxLayer.append(actor);
 
+  const token = Symbol(walker);
+  roleTokens.set(walker, token);
+
   const ctrl = {
     aborted: false,
     anim: null,
     timer: null,
+    timerRes: null,
+    timerRemaining: 0,
+    timerStartedAt: 0,
     abort() {
       this.aborted = true;
       if (this.anim) try { this.anim.cancel(); } catch (_) {}
-      if (this.timer) clearTimeout(this.timer);
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+      if (this.timerRes) {
+        const r = this.timerRes;
+        this.timerRes = null;
+        r();
+      }
+    },
+    pause() {
+      if (this.anim) {
+        try { this.anim.pause(); } catch (_) {}
+      }
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+        this.timerRemaining = Math.max(0, this.timerRemaining - (Date.now() - this.timerStartedAt));
+      }
+    },
+    resume() {
+      if (this.anim) {
+        try { this.anim.play(); } catch (_) {}
+      }
+      if (this.timerRes && this.timerRemaining > 0) {
+        this.timerStartedAt = Date.now();
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          const r = this.timerRes;
+          this.timerRes = null;
+          if (r) r();
+        }, this.timerRemaining);
+      }
     }
   };
   activeAnimControllers.add(ctrl);
@@ -312,7 +369,14 @@ async function runWalk(el, walker, target, fx, speed) {
     setTimeout(() => targetDesk?.classList.remove("ping"), 600);
 
     await new Promise(res => {
-      ctrl.timer = setTimeout(res, timing.talkDuration);
+      ctrl.timerRes = res;
+      ctrl.timerRemaining = timing.talkDuration;
+      ctrl.timerStartedAt = Date.now();
+      ctrl.timer = setTimeout(() => {
+        ctrl.timer = null;
+        ctrl.timerRes = null;
+        res();
+      }, timing.talkDuration);
     });
     bubble.remove();
     if (ctrl.aborted) return;
@@ -323,8 +387,11 @@ async function runWalk(el, walker, target, fx, speed) {
   } finally {
     activeAnimControllers.delete(ctrl);
     actor.remove();
-    walkerDesk?.classList.remove("away");
-    finishWalk(el, walker);
+    if (roleTokens.get(walker) === token) {
+      roleTokens.delete(walker);
+      walkerDesk?.classList.remove("away");
+      finishWalk(el, walker);
+    }
   }
 }
 
@@ -354,7 +421,10 @@ export function playEffect(el, fx, speed = 1) {
   if (fx.kind === "reply") {
     walker = "manager";
     target = "user";
-  } else if (fx.kind === "checkpoint" || fx.kind === "approval") {
+  } else if (fx.kind === "approval") {
+    walker = fx.from;
+    target = "user";
+  } else if (fx.kind === "checkpoint") {
     walker = fx.from;
     target = "manager";
   }
@@ -397,11 +467,29 @@ export function playEffect(el, fx, speed = 1) {
 
   // Queue walk with Single Presence protection
   const status = globalWalkQueue.enqueue(walker, { walker, target, fx, speed });
-  if (status === "overflow") {
-    // Congested replay at x16: skip walking animation to protect performance
-    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
-    targetDesk?.classList.add("ping");
-    setTimeout(() => targetDesk?.classList.remove("ping"), 200);
+  if (status === "overflow" || status === "dropped") {
+    // Congested or role already has a waiting walk: flash bubble / ping at walker desk immediately
+    const walkerDesk = walker === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(walker)}"]`);
+    if (walkerDesk) {
+      walkerDesk.classList.add("ping");
+      const { text, cls } = getBubbleContent(fx);
+      const b = walkerDesk.querySelector(".bubble");
+      if (b) {
+        const prev = b.textContent;
+        const prevCls = b.className;
+        b.textContent = text;
+        b.className = "bubble" + (cls ? ` ${cls}` : "");
+        setTimeout(() => {
+          if (b.textContent === text) {
+            b.textContent = prev;
+            b.className = prevCls;
+          }
+          walkerDesk.classList.remove("ping");
+        }, 600);
+      } else {
+        setTimeout(() => walkerDesk.classList.remove("ping"), 300);
+      }
+    }
     return;
   }
   if (status === "queued") {
