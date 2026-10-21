@@ -17,6 +17,7 @@ export const api = {
   roles: () => call("GET", "/roles"),
   workspaces: () => call("GET", "/workspaces"),
   addWorkspace: (path, name) => call("POST", "/workspaces", { path, name }),
+  renameWorkspace: (id, name) => call("PATCH", `/workspaces/${enc(id)}`, { name }),
   config: id => call("GET", `/workspaces/${enc(id)}/config`),
   runs: id => call("GET", `/workspaces/${enc(id)}/runs`),
   events: runId => call("GET", `/runs/${enc(runId)}/events`),

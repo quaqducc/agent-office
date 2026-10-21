@@ -71,3 +71,18 @@ test("adding an already registered folder with a new name renames it", () => {
   assert.equal(store.get(first.id)!.name, "agent-company");
   assert.equal(store.add(folder).name, "agent-company", "no name given keeps the current one");
 });
+
+test("rename updates workspace name and persists", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-rename-"));
+  const ws = store.add(folder, "Old name");
+  const renamed = store.rename(ws.id, "  New name  ");
+  assert.equal(renamed.name, "New name");
+  assert.equal(renamed.id, ws.id);
+  assert.equal(renamed.path, folder);
+  assert.equal(store.get(ws.id)!.name, "New name");
+  assert.equal(new WorkspaceStore(store.dataDir).get(ws.id)!.name, "New name", "persists to disk");
+  assert.throws(() => store.rename(ws.id, "   "), /name is required/);
+  assert.throws(() => store.rename("unknown-id-123", "Valid"), /unknown workspace/);
+});
+

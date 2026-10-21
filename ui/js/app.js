@@ -72,8 +72,8 @@ function ask(o) {
   d.innerHTML = `<form method="dialog" class="ask-form">
     <h2>${esc(o.title)}</h2>${o.text ? `<p class="ask-text">${esc(o.text)}</p>` : ""}
     ${(o.fields ?? []).map(f => `<label class="field"><span>${esc(f.label)}${f.required ? "" : ' <em>(tuỳ chọn)</em>'}</span>
-      ${f.multiline ? `<textarea name="${esc(f.name)}" rows="3" placeholder="${esc(f.placeholder ?? "")}"${f.required ? " required" : ""}></textarea>`
-                    : `<input name="${esc(f.name)}" placeholder="${esc(f.placeholder ?? "")}" autocomplete="off"${f.required ? " required" : ""}>`}
+      ${f.multiline ? `<textarea name="${esc(f.name)}" rows="3" placeholder="${esc(f.placeholder ?? "")}"${f.required ? " required" : ""}>${esc(f.value ?? "")}</textarea>`
+                    : `<input name="${esc(f.name)}"${f.value !== undefined ? ` value="${esc(f.value)}"` : ""} placeholder="${esc(f.placeholder ?? "")}" autocomplete="off"${f.required ? " required" : ""}>`}
       ${f.hint ? `<small>${esc(f.hint)}</small>` : ""}</label>`).join("")}
     <div class="ask-buttons"><button type="button" class="btn" value="cancel">Huỷ</button><button type="submit" class="btn ${o.danger ? "danger" : "primary"}" value="ok">${esc(o.confirm)}</button></div>
   </form>`;
@@ -200,8 +200,21 @@ function renderWorkspaceMenu() {
   el.wsName.textContent = cur?.name ?? "Chưa có";
   el.wsBtn.title = cur?.path ?? "";
   el.wsPop.innerHTML = (app.workspaces.length ? `<p class="pop-title">Workspace</p>` : "") +
-    app.workspaces.map(w => `<button type="button" class="pop-item${w.id === app.wsId ? " on" : ""}" data-ws="${esc(w.id)}">
-      ${icon("folder")}<span><b>${esc(w.name)}</b><small>${esc(w.path)}</small></span>${w.id === app.wsId ? icon("check", "tick") : ""}</button>`).join("") +
+    app.workspaces.map(w => {
+      const isCur = w.id === app.wsId;
+      if (isCur) {
+        return `<div class="pop-item-row on">
+          <button type="button" class="pop-item on" data-ws="${esc(w.id)}">
+            ${icon("folder")}<span><b>${esc(w.name)}</b><small>${esc(w.path)}</small></span>${icon("check", "tick")}
+          </button>
+          <button type="button" class="ws-rename-btn" data-act="rename-ws" title="Đổi tên workspace" aria-label="Đổi tên workspace">
+            ${icon("edit")}
+          </button>
+        </div>`;
+      }
+      return `<button type="button" class="pop-item" data-ws="${esc(w.id)}">
+        ${icon("folder")}<span><b>${esc(w.name)}</b><small>${esc(w.path)}</small></span></button>`;
+    }).join("") +
     `<button type="button" class="pop-item add" data-act="add-ws">${icon("plus")}<span><b>Thêm workspace…</b><small>Đăng ký một thư mục project</small></span></button>`;
 }
 
@@ -390,6 +403,27 @@ async function replyApproval(id, decision) {
   } catch (e) { toast(`Không gửi được: ${e.message}`, "bad"); }
 }
 
+async function renameWorkspace() {
+  const cur = app.workspaces.find(w => w.id === app.wsId);
+  if (!cur) return;
+  const v = await ask({
+    title: "Đổi tên workspace",
+    fields: [{ name: "name", label: "Tên mới", value: cur.name, required: true }],
+    confirm: "Lưu",
+  });
+  if (!v || !v.name) return;
+  try {
+    const updated = await api.renameWorkspace(cur.id, v.name);
+    const ws = app.workspaces.find(w => w.id === cur.id);
+    if (ws) ws.name = updated.name;
+    el.wsName.textContent = updated.name;
+    renderWorkspaceMenu();
+    toast(`Đã đổi tên thành ${updated.name}`, "good");
+  } catch (e) {
+    toast(`Không đổi tên được: ${e.message}`, "bad");
+  }
+}
+
 async function addWorkspace() {
   const v = await ask({
     title: "Thêm workspace", text: "Workspace là thư mục project mà đội AI sẽ đọc và làm việc trong đó.",
@@ -422,6 +456,7 @@ document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-act], [data-ws], [data-run], [data-suggest]");
   if (!t) return;
   if (t.dataset.act === "add-ws") addWorkspace();
+  else if (t.dataset.act === "rename-ws") renameWorkspace();
   else if (t.dataset.act === "hide-approvals") el.approvals.classList.add("min");
   else if (t.dataset.act === "show-approvals") {
     el.approvals.classList.remove("min");

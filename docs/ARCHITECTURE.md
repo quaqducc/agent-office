@@ -341,6 +341,7 @@ a per-role sandbox is the planned upgrade.
 | `POST /store/roles/:id/install` · `DELETE /store/roles/:id` | install or update / uninstall a store role |
 | `GET /roles` | installed roles (`id, name, description, owns`) |
 | `GET /workspaces` · `POST /workspaces {path, name?}` | list / register a workspace |
+| `PATCH /workspaces/:id {name}` | rename a workspace |
 | `GET /workspaces/:id/config` · `/runs` · `/approvals` | team + limits / run history / pending approvals |
 | `POST /workspaces/:id/messages {text}` | message the Manager (starts or joins a run) |
 | `GET /runs/:runId/events` · `POST /runs/:runId/stop` | full event log of a run / stop a run |

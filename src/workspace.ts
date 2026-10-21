@@ -42,6 +42,18 @@ export class WorkspaceStore {
     return this.list().find(w => w.id === id);
   }
 
+  rename(id: string, name: string): Workspace {
+    const label = name?.trim();
+    if (!label) throw new Error("name is required");
+    const all = this.list();
+    const found = all.find(w => w.id === id);
+    if (!found) throw new Error(`unknown workspace ${id}`);
+    if (label === found.name) return found;
+    const renamed = { ...found, name: label };
+    writeFileSync(this.file, JSON.stringify(all.map(w => (w.id === found.id ? renamed : w)), null, 2));
+    return renamed;
+  }
+
   /** Register a folder; a folder that is already registered keeps its id and takes the new name, if one is given. */
   add(path: string, name?: string): Workspace {
     // pasted paths often carry quotes ("Copy as path") or stray spaces

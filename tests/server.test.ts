@@ -66,6 +66,27 @@ test("registers workspace, lists it, and serves roles", async () => {
   } finally { await srv.close(); }
 });
 
+test("renames workspace via PATCH /workspaces/:id", async () => {
+  const { srv, api, ws } = await setup(async () => "ok");
+  try {
+    const res = await api("PATCH", `/workspaces/${ws.id}`, { name: "  Renamed WS  " });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.id, ws.id);
+    assert.equal(res.json.name, "Renamed WS");
+    assert.equal(res.json.path, ws.path);
+
+    const list = (await api("GET", "/workspaces")).json;
+    assert.equal(list.find((w: any) => w.id === ws.id)?.name, "Renamed WS");
+
+    assert.equal((await api("PATCH", `/workspaces/${ws.id}`, { name: "   " })).status, 400);
+    assert.equal((await api("PATCH", `/workspaces/${ws.id}`, {})).status, 400);
+    assert.equal((await api("PATCH", "/workspaces/unknown-id-xyz", { name: "Valid" })).status, 404);
+
+    const nonJson = await fetch(`${srv.url}/workspaces/${ws.id}`, { method: "PATCH", headers: { "content-type": "text/plain" }, body: "name=foo" });
+    assert.equal(nonJson.status, 415);
+  } finally { await srv.close(); }
+});
+
 test("message starts run, SSE streams events, run is indexed and replayable", async () => {
   const { srv, api, ws } = await setup(async role => (role === "manager" ? "xin chào" : ""));
   try {

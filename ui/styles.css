@@ -166,6 +166,18 @@ h1, h2, h3 { margin: 0; }
 }
 .pop-item:hover, .pop-item:focus-visible { background: var(--panel-2); outline: none; }
 .pop-item.on { background: var(--accent-soft); }
+.pop-item-row { display: flex; align-items: center; border-radius: 10px; width: 100%; }
+.pop-item-row.on { background: var(--accent-soft); }
+.pop-item-row.on .pop-item.on { background: none; flex: 1; }
+.ws-rename-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: none; border-radius: 8px; padding: 6px; margin-right: 6px;
+  color: var(--muted); cursor: pointer; flex: none;
+}
+.ws-rename-btn:hover, .ws-rename-btn:focus-visible {
+  color: var(--ink); background: var(--panel); outline: none;
+}
+.ws-rename-btn .ico { width: 16px; height: 16px; }
 .pop-item > .ico { margin-top: 2px; color: var(--muted); }
 .pop-item > span:not(.run-dot) { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .pop-item b { font-weight: 600; display: flex; align-items: center; gap: 8px; }

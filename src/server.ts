@@ -124,10 +124,10 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     };
 
     if (m === "OPTIONS") {
-      res.writeHead(204, { ...cors, "access-control-allow-methods": "GET,POST,PUT,DELETE", "access-control-allow-headers": "content-type" });
+      res.writeHead(204, { ...cors, "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE", "access-control-allow-headers": "content-type" });
       return res.end();
     }
-    if ((m === "POST" || m === "PUT" || m === "DELETE") && !(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "content-type must be application/json");
+    if ((m === "POST" || m === "PUT" || m === "PATCH" || m === "DELETE") && !(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "content-type must be application/json");
     if (m === "GET" && (url.pathname === "/" || url.pathname.startsWith("/ui/") || url.pathname === "/vendor/marked.js")) {
       const file = url.pathname === "/" ? join(UI_DIR, "index.html")
         : url.pathname === "/vendor/marked.js" ? MARKED
@@ -200,6 +200,20 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       return;
     }
     if (parts[0] === "workspaces" && parts[1]) {
+      if (m === "PATCH" && !parts[2]) {
+        const b = await body(req);
+        if (typeof b.name !== "string" || !b.name.trim()) throw new HttpError(400, "name is required");
+        try {
+          const updated = store.rename(parts[1], b.name);
+          const existing = ctxs.get(parts[1]);
+          if (existing) existing.ws = updated;
+          return json(200, updated);
+        } catch (e) {
+          const msg = (e as Error).message;
+          if (msg.startsWith("unknown workspace")) throw new HttpError(404, msg);
+          throw new HttpError(400, msg);
+        }
+      }
       const ctx = ctxFor(parts[1]);
       if (m === "GET" && parts[2] === "runs") return json(200, store.runs(ctx.ws));
       if (m === "GET" && parts[2] === "config") return json(200, store.config(ctx.ws));
