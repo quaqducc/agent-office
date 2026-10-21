@@ -70,10 +70,11 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     const ws = store.get(id);
     if (!ws) throw new HttpError(404, `unknown workspace ${id}`);
     const cfg = store.config(ws);
-    const sig = `${roleIds().join(",")}:${cfg.roles.join(",")}:${JSON.stringify(cfg.rooms ?? [])}`;
+    const sig = `${roleIds().join(",")}:${cfg.roles.join(",")}`;
     const existing = ctxs.get(id);
-    // roles installed/removed or workspace team/rooms changed: rebuild once idle
+    // roles installed/removed or workspace team changed: rebuild once idle
     if (existing && (existing.sig === sig || existing.router.activeRunId())) return existing;
+    if (existing) existing.router.dispose();
     const log = new EventLog(runsDir(ws), ws.id);
     let router!: Router;
     const getRouter = () => router;
@@ -104,7 +105,12 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
 
   /** The role set changed (store install/uninstall): idle workspaces rebuild their team on next use. */
   function refreshIdleContexts() {
-    for (const [id, c] of ctxs) if (!c.router.activeRunId()) ctxs.delete(id);
+    for (const [id, c] of ctxs) {
+      if (!c.router.activeRunId()) {
+        c.router.dispose();
+        ctxs.delete(id);
+      }
+    }
   }
 
   async function body(req: IncomingMessage): Promise<any> {
@@ -253,19 +259,27 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       if (m === "PUT" && parts[2] === "config") {
         const ws = store.get(parts[1]);
         if (!ws) throw new HttpError(404, `unknown workspace ${parts[1]}`);
+        const existing = ctxs.get(parts[1]);
+        if (existing && existing.router.activeRunId()) {
+          throw new HttpError(409, "Đang có lần chạy — lưu lại sau khi đội rảnh");
+        }
         const b = await body(req);
         if (!Array.isArray(b.roles)) throw new HttpError(400, "roles must be an array");
+        const cleanRoles: string[] = [...new Set(b.roles as string[])];
         const installed = roleIds();
-        const missing = b.roles.filter((r: string) => !installed.includes(r));
+        const missing = cleanRoles.filter((r: string) => !installed.includes(r));
         if (missing.length > 0) {
           throw new HttpError(400, `Các vai trò sau chưa được cài đặt: ${missing.join(", ")}`, { missing });
         }
-        const cfg = store.saveConfig(ws, { roles: b.roles, rooms: b.rooms, template: b.template });
-        const existing = ctxs.get(parts[1]);
-        if (existing && !existing.router.activeRunId()) {
-          ctxFor(parts[1]);
+        try {
+          const cfg = store.saveConfig(ws, { roles: cleanRoles, rooms: b.rooms, template: b.template });
+          if (existing && !existing.router.activeRunId()) {
+            ctxFor(parts[1]);
+          }
+          return json(200, cfg);
+        } catch (e) {
+          throw new HttpError(400, (e as Error).message);
         }
-        return json(200, cfg);
       }
       const ctx = ctxFor(parts[1]);
       if (m === "GET" && parts[2] === "runs") return json(200, store.runs(ctx.ws));

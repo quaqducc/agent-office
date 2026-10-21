@@ -148,3 +148,68 @@ test("config and saveConfig persist template, rooms and enforce invariants", () 
   assert.ok(updated.limits.maxDepth > 0);
 });
 
+test("config avoids room index shift when an invalid room exists", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-shift-"));
+  const ws = store.add(folder, "Shift WS");
+
+  const cfgFile = join(folder, ".company", "config.json");
+  writeFileSync(
+    cfgFile,
+    JSON.stringify({
+      roles: ["manager", "developer", "critic"],
+      rooms: [
+        { id: "invalid", name: "" }, // invalid room (empty name)
+        { id: "exec", name: "Exec", roles: ["manager"] },
+        { id: "eng", name: "Eng", roles: ["developer", "critic"] },
+      ],
+    })
+  );
+
+  const cfg = store.config(ws);
+  assert.equal(cfg.rooms?.length, 2);
+  const exec = cfg.rooms?.find(r => r.id === "exec");
+  const eng = cfg.rooms?.find(r => r.id === "eng");
+  assert.deepEqual(exec?.roles, ["manager"]);
+  assert.deepEqual(eng?.roles, ["developer", "critic"]);
+});
+
+test("config falls back to default when config.json is corrupted", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-corrupt-"));
+  const ws = store.add(folder, "Corrupt WS");
+
+  const cfgFile = join(folder, ".company", "config.json");
+  writeFileSync(cfgFile, "{ corrupted json: 123");
+
+  const cfg = store.config(ws);
+  assert.ok(cfg.roles.includes("manager"));
+  assert.equal(cfg.rooms, undefined);
+});
+
+test("saveConfig strictly validates rooms, names, ids and counts", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-val-"));
+  const ws = store.add(folder, "Val WS");
+
+  // > 6 rooms
+  const sevenRooms = Array.from({ length: 7 }, (_, i) => ({ id: `r-${i}`, name: `Room ${i}`, roles: [] }));
+  assert.throws(() => store.saveConfig(ws, { roles: ["manager"], rooms: sevenRooms }), /maximum 6 rooms/);
+
+  // Invalid room id format
+  assert.throws(() => store.saveConfig(ws, { roles: ["manager"], rooms: [{ id: "Bad_ID!", name: "Room", roles: [] }] }), /invalid room id/);
+
+  // Duplicate room id
+  assert.throws(
+    () => store.saveConfig(ws, { roles: ["manager"], rooms: [{ id: "r1", name: "Room 1", roles: [] }, { id: "r1", name: "Room 2", roles: [] }] }),
+    /duplicate room id/
+  );
+
+  // Room name > 40 chars
+  assert.throws(
+    () => store.saveConfig(ws, { roles: ["manager"], rooms: [{ id: "r1", name: "x".repeat(41), roles: [] }] }),
+    /room name/
+  );
+});
+
+

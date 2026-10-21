@@ -299,6 +299,7 @@ export async function openOfficeDialog(ctx) {
     // Room name editing
     d.querySelectorAll(".room-name-input").forEach(input => {
       input.addEventListener("input", e => {
+        if (selectedTemplate === "default") selectedTemplate = null;
         const idx = Number(e.target.dataset.roomIdx);
         if (rooms[idx]) rooms[idx].name = e.target.value.trim() || `Phòng ${idx + 1}`;
       });
@@ -307,7 +308,7 @@ export async function openOfficeDialog(ctx) {
     // Add room
     d.querySelector('[data-act="add-room"]')?.addEventListener("click", () => {
       if (rooms.length >= 6) return;
-      selectedTemplate = "";
+      selectedTemplate = null;
       rooms.push({
         id: `room-${Date.now()}`,
         name: `Phòng ${rooms.length + 1}`,
@@ -320,7 +321,7 @@ export async function openOfficeDialog(ctx) {
     d.querySelectorAll("[data-del-room]").forEach(b => {
       b.addEventListener("click", () => {
         if (rooms.length <= 1) return;
-        selectedTemplate = "";
+        selectedTemplate = null;
         const idx = Number(b.dataset.delRoom);
         const deletedRoles = rooms[idx].roles || [];
         rooms.splice(idx, 1);
@@ -351,6 +352,7 @@ export async function openOfficeDialog(ctx) {
     // Role room select
     d.querySelectorAll(".select-room[data-role]").forEach(sel => {
       sel.addEventListener("change", e => {
+        selectedTemplate = null;
         const roleId = e.target.dataset.role;
         const newRoomIdx = Number(e.target.value);
         for (const rm of rooms) rm.roles = rm.roles.filter(r => r !== roleId);

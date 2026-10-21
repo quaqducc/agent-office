@@ -138,6 +138,55 @@ test("offices endpoint and PUT /workspaces/:id/config", async () => {
   } finally { await srv.close(); }
 });
 
+test("PUT /workspaces/:id/config returns 409 when run is active", async () => {
+  const { srv, api, ws } = await setup(async () => {
+    await sleep(200);
+    return "ok";
+  });
+  try {
+    // Start a run in the workspace
+    await api("POST", `/workspaces/${ws.id}/messages`, { text: "start" });
+    // Attempt to update config while run is active
+    const res = await api("PUT", `/workspaces/${ws.id}/config`, { roles: ["manager"] });
+    assert.equal(res.status, 409);
+    assert.equal(res.json.error, "Đang có lần chạy — lưu lại sau khi đội rảnh");
+  } finally { await srv.close(); }
+});
+
+test("PUT /workspaces/:id/config deduplicates roles and rejects invalid rooms", async () => {
+  const { srv, api, ws } = await setup(async () => "ok");
+  try {
+    // Duplicate roles in payload are deduplicated
+    const res = await api("PUT", `/workspaces/${ws.id}/config`, { roles: ["manager", "developer", "developer"] });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json.roles, ["manager", "developer"]);
+
+    // More than 6 rooms rejected
+    const tooMany = Array.from({ length: 7 }, (_, i) => ({ id: `r-${i}`, name: `R${i}`, roles: [] }));
+    const r1 = await api("PUT", `/workspaces/${ws.id}/config`, { roles: ["manager"], rooms: tooMany });
+    assert.equal(r1.status, 400);
+
+    // Invalid room id format
+    const r2 = await api("PUT", `/workspaces/${ws.id}/config`, { roles: ["manager"], rooms: [{ id: "Invalid ID", name: "Room", roles: [] }] });
+    assert.equal(r2.status, 400);
+
+    // Changing rooms does not rebuild router (preserves active context)
+    const r3 = await api("PUT", `/workspaces/${ws.id}/config`, {
+      roles: ["manager", "developer"],
+      rooms: [{ id: "r1", name: "Executive", roles: ["manager", "developer"] }],
+    });
+    assert.equal(r3.status, 200);
+
+    // Update only room name: router is kept
+    const r4 = await api("PUT", `/workspaces/${ws.id}/config`, {
+      roles: ["manager", "developer"],
+      rooms: [{ id: "r1", name: "Renamed Room", roles: ["manager", "developer"] }],
+    });
+    assert.equal(r4.status, 200);
+    assert.equal(r4.json.rooms[0].name, "Renamed Room");
+  } finally { await srv.close(); }
+});
+
 test("fs endpoints: drives and browse directory", async () => {
   const { srv, api } = await setup(async () => "ok");
   try {

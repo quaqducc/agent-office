@@ -243,6 +243,14 @@ export class Router {
     this.finishRun(run);
   }
 
+  dispose(): void {
+    for (const [, st] of this.states) {
+      if (st.runner) {
+        st.runner.then(r => r.dispose?.()).catch(() => {});
+      }
+    }
+  }
+
   // ---------- internals ----------
 
   private subtree(taskId: string): Set<string> {

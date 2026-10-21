@@ -699,9 +699,11 @@ $("#open-office")?.addEventListener("click", () => {
       app.template = updated.template ?? null;
       setRoles(updated.roles);
       if (app.live) {
+        const nextRoles = {};
         for (const r of updated.roles) {
-          if (!app.live.roles[r]) app.live.roles[r] = { status: "idle" };
+          nextRoles[r] = app.live.roles[r] || { status: "idle" };
         }
+        app.live.roles = nextRoles;
       }
       if (el.office) el.office.dataset.roles = "";
       draw();

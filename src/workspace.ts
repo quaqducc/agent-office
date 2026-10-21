@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_LIMITS } from "./config.ts";
 import { roleIds } from "./library.ts";
@@ -95,7 +95,15 @@ export class WorkspaceStore {
 
   config(ws: Workspace): WorkspaceConfig {
     const f = join(companyDir(ws), "config.json");
-    const raw = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
+    let raw: any = {};
+    if (existsSync(f)) {
+      try {
+        raw = JSON.parse(readFileSync(f, "utf8"));
+      } catch (err) {
+        console.warn(`[config] warning: corrupted config.json in ${ws.path}, falling back to defaults`, err);
+        raw = {};
+      }
+    }
     const all = roleIds();
     const chosen: string[] = Array.isArray(raw.roles) ? raw.roles.filter((r: string) => all.includes(r)) : all;
     const roles = chosen.includes("manager") ? chosen : ["manager", ...chosen];
@@ -103,27 +111,28 @@ export class WorkspaceStore {
 
     let rooms: RoomDef[] | undefined;
     if (Array.isArray(raw.rooms) && raw.rooms.length > 0) {
-      const validRooms: RoomDef[] = raw.rooms
-        .filter((rm: any) => rm && typeof rm.id === "string" && typeof rm.name === "string" && Array.isArray(rm.roles))
-        .map((rm: any) => ({
-          id: String(rm.id).trim() || "room",
-          name: String(rm.name).trim() || "Phòng",
-          roles: [] as string[],
-        }));
+      const validRooms: RoomDef[] = [];
+      const assigned = new Set<string>();
 
-      if (validRooms.length > 0) {
-        const assigned = new Set<string>();
-        for (let i = 0; i < validRooms.length; i++) {
-          const rawRoomRoles = raw.rooms[i]?.roles;
-          if (Array.isArray(rawRoomRoles)) {
-            for (const r of rawRoomRoles) {
-              if (roles.includes(r) && !assigned.has(r)) {
-                validRooms[i].roles.push(r);
-                assigned.add(r);
-              }
+      for (const rm of raw.rooms) {
+        if (!rm || typeof rm.id !== "string" || typeof rm.name !== "string") continue;
+        const id = String(rm.id).trim();
+        const name = String(rm.name).trim();
+        if (!id || !name) continue;
+
+        const roomRoles: string[] = [];
+        if (Array.isArray(rm.roles)) {
+          for (const r of rm.roles) {
+            if (roles.includes(r) && !assigned.has(r)) {
+              roomRoles.push(r);
+              assigned.add(r);
             }
           }
         }
+        validRooms.push({ id, name, roles: roomRoles });
+      }
+
+      if (validRooms.length > 0) {
         for (const r of roles) {
           if (!assigned.has(r)) {
             validRooms[0].roles.push(r);
@@ -138,15 +147,67 @@ export class WorkspaceStore {
   }
 
   saveConfig(ws: Workspace, patch: { roles: string[]; rooms?: RoomDef[] | null; template?: string | null }): WorkspaceConfig {
-    const f = join(companyDir(ws), "config.json");
-    const raw = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
+    if (!Array.isArray(patch.roles)) throw new Error("roles must be an array");
+    const cleanRoles = [...new Set(patch.roles)];
+
+    if (patch.rooms !== undefined && patch.rooms !== null) {
+      if (!Array.isArray(patch.rooms)) throw new Error("rooms must be an array");
+      if (patch.rooms.length > 6) throw new Error("maximum 6 rooms allowed");
+      const roomIds = new Set<string>();
+      for (const rm of patch.rooms) {
+        if (!rm || typeof rm !== "object") throw new Error("invalid room definition");
+        const id = String(rm.id ?? "").trim();
+        if (!/^[a-z0-9-]{1,40}$/.test(id)) {
+          throw new Error(`invalid room id: "${id}" (must match ^[a-z0-9-]{1,40}$)`);
+        }
+        if (roomIds.has(id)) {
+          throw new Error(`duplicate room id: "${id}"`);
+        }
+        roomIds.add(id);
+
+        const name = String(rm.name ?? "").trim();
+        if (!name || name.length > 40) {
+          throw new Error("room name must be 1 to 40 characters");
+        }
+        if (rm.roles !== undefined && !Array.isArray(rm.roles)) {
+          throw new Error("room roles must be an array");
+        }
+      }
+    }
+
+    const dir = companyDir(ws);
+    if (existsSync(dir) && lstatSync(dir).isSymbolicLink()) {
+      throw new Error(".company directory cannot be a symbolic link");
+    }
+    mkdirSync(dir, { recursive: true });
+
+    const f = join(dir, "config.json");
+    if (existsSync(f) && lstatSync(f).isSymbolicLink()) {
+      throw new Error("config.json cannot be a symbolic link");
+    }
+
+    let raw: any = {};
+    if (existsSync(f)) {
+      try {
+        raw = JSON.parse(readFileSync(f, "utf8"));
+      } catch {
+        raw = {};
+      }
+    }
+
     const updated: any = {
       ...raw,
-      roles: patch.roles,
+      roles: cleanRoles,
     };
     if (patch.rooms !== undefined) {
       if (!patch.rooms || patch.rooms.length === 0) delete updated.rooms;
-      else updated.rooms = patch.rooms;
+      else {
+        updated.rooms = patch.rooms.map(rm => ({
+          id: String(rm.id).trim(),
+          name: String(rm.name).trim(),
+          roles: Array.isArray(rm.roles) ? [...new Set(rm.roles.filter(r => cleanRoles.includes(r)))] : [],
+        }));
+      }
     }
     if (patch.template !== undefined) {
       if (!patch.template) delete updated.template;
