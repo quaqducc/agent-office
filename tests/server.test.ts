@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startServer } from "../src/server.ts";
+import { browseDirectory } from "../src/fs-browse.ts";
 import { fakeFactory, never, sleep } from "./helpers/fake-runner.ts";
 import type { Router } from "../src/router.ts";
 import type { TeamEvent } from "../src/types.ts";
@@ -85,6 +86,57 @@ test("renames workspace via PATCH /workspaces/:id", async () => {
     const nonJson = await fetch(`${srv.url}/workspaces/${ws.id}`, { method: "PATCH", headers: { "content-type": "text/plain" }, body: "name=foo" });
     assert.equal(nonJson.status, 415);
   } finally { await srv.close(); }
+});
+
+test("fs endpoints: drives and browse directory", async () => {
+  const { srv, api } = await setup(async () => "ok");
+  try {
+    const drives = await api("GET", "/fs/drives");
+    assert.equal(drives.status, 200);
+    assert.ok(Array.isArray(drives.json.roots));
+    assert.ok(drives.json.roots.length > 0);
+    assert.ok(typeof drives.json.home === "string");
+
+    const base = tmp("fs-browse-");
+    mkdirSync(join(base, "sub1"));
+    mkdirSync(join(base, "sub2"));
+    mkdirSync(join(base, ".hidden"));
+    mkdirSync(join(base, "Windows"));
+    writeFileSync(join(base, "file.txt"), "hello");
+
+    const res = await api("POST", "/fs/browse", { path: base });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.current, base);
+    assert.ok(Array.isArray(res.json.folders));
+    const names = res.json.folders.map((f: any) => f.name);
+    assert.ok(names.includes("sub1"));
+    assert.ok(names.includes("sub2"));
+    assert.ok(!names.includes("file.txt"), "files must NOT be returned");
+    assert.ok(!names.includes(".hidden"), "hidden folders must be skipped");
+    assert.ok(!names.includes("Windows"), "system folders must be skipped");
+
+    const missing = await api("POST", "/fs/browse", { path: join(base, "not-exist-xyz") });
+    assert.equal(missing.status, 404);
+
+    const notDir = await api("POST", "/fs/browse", { path: join(base, "file.txt") });
+    assert.equal(notDir.status, 400);
+
+    const def = await api("POST", "/fs/browse", {});
+    assert.equal(def.status, 200);
+    assert.ok(def.json.current);
+  } finally { await srv.close(); }
+});
+
+test("fs browse handles permission error gracefully", async () => {
+  const target = tmp("perm-test-");
+  const fakeReaddir: any = () => {
+    const err = new Error("EACCES: permission denied") as any;
+    err.code = "EACCES";
+    throw err;
+  };
+  const res = browseDirectory(target, fakeReaddir);
+  assert.deepEqual(res.folders, []);
+  assert.equal(res.error, "permission denied");
 });
 
 test("message starts run, SSE streams events, run is indexed and replayable", async () => {

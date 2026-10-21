@@ -425,17 +425,173 @@ async function renameWorkspace() {
 }
 
 async function addWorkspace() {
-  const v = await ask({
-    title: "Thêm workspace", text: "Workspace là thư mục project mà đội AI sẽ đọc và làm việc trong đó.",
-    fields: [
-      { name: "path", label: "Đường dẫn thư mục", placeholder: "D:\\projects\\mmo-shop", required: true, hint: "Thư mục phải có sẵn trên máy." },
-      { name: "name", label: "Tên hiển thị", placeholder: "Để trống sẽ dùng tên thư mục" },
-    ],
-    confirm: "Thêm workspace",
-  });
-  if (!v) return;
-  try { const ws = await api.addWorkspace(v.path, v.name || undefined); await loadWorkspaces(ws.id); toast(`Đã thêm ${ws.name}`, "good"); }
-  catch (e) { toast(`Không thêm được: ${e.message}`, "bad"); }
+  const d = el.ask;
+  d.classList.add("ws-dialog");
+
+  let currentPath = "";
+  let parentPath = null;
+  let roots = [];
+  let home = "";
+  let folders = [];
+  let errorMsg = null;
+  let userEditedName = false;
+
+  function baseName(p) {
+    const s = (p ?? "").trim().replace(/^["']|["']$/g, "").replace(/[\\/]+$/, "");
+    const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+    return i >= 0 ? s.slice(i + 1) : s;
+  }
+
+  async function loadDir(target) {
+    try {
+      const clean = target ? target.trim().replace(/^["']|["']$/g, "").trim() : undefined;
+      const res = await api.fsBrowse(clean);
+      currentPath = res.current;
+      parentPath = res.parent;
+      roots = res.roots || [];
+      home = res.home || "";
+      folders = res.folders || [];
+      errorMsg = res.error || null;
+    } catch (e) {
+      errorMsg = e.message;
+    }
+  }
+
+  await loadDir();
+
+  function renderDialog(selectedPath, selectedName) {
+    const curPath = selectedPath || currentPath;
+    const curName = selectedName !== undefined ? selectedName : (curPath ? baseName(curPath) : "");
+
+    d.innerHTML = `<form method="dialog" class="ask-form ws-browse-form">
+      <h2>Thêm workspace</h2>
+      <p class="ask-text">Chọn thư mục project trên máy hoặc dán trực tiếp đường dẫn bên dưới.</p>
+
+      <div class="ws-nav-bar">
+        <div class="ws-nav-roots">
+          ${roots.map(r => `<button type="button" class="btn small ws-root-btn${r === currentPath ? " primary" : ""}" data-path="${esc(r)}">${esc(r)}</button>`).join("")}
+          ${home ? `<button type="button" class="btn small ws-home-btn" data-path="${esc(home)}" title="Thư mục cá nhân">Home</button>` : ""}
+        </div>
+        <button type="button" class="btn small ws-up-btn" ${parentPath ? `data-path="${esc(parentPath)}"` : "disabled"} title="Lên thư mục cha">↑ Lên cấp</button>
+      </div>
+
+      <div class="ws-cur-bar" title="${esc(currentPath)}">
+        <span class="ws-cur-icon">${icon("folder")}</span>
+        <span class="ws-cur-text">${esc(currentPath || "…")}</span>
+      </div>
+
+      <div class="ws-folder-list" role="listbox" tabindex="0">
+        ${errorMsg ? `<div class="ws-browse-msg warn">${icon("alert")}<span>${esc(errorMsg === "permission denied" ? "Không có quyền truy cập thư mục này." : errorMsg)}</span></div>` : ""}
+        ${!errorMsg && folders.length === 0 ? `<div class="ws-browse-msg muted">Thư mục này không có thư mục con.</div>` : ""}
+        ${folders.map(f => `
+          <button type="button" class="ws-folder-item${f.path === curPath ? " selected" : ""}" data-name="${esc(f.name)}" data-path="${esc(f.path)}">
+            ${icon("folder")}<span>${esc(f.name)}</span>
+          </button>
+        `).join("")}
+      </div>
+
+      <div class="ws-form-fields">
+        <label class="field">
+          <span>Đường dẫn thư mục</span>
+          <div class="ws-path-input-row">
+            <input id="ws-input-path" name="path" value="${esc(curPath)}" placeholder="D:\\projects\\my-app" autocomplete="off" required>
+            <button type="button" class="btn small ws-goto-btn" title="Duyệt thư mục đã nhập">Duyệt</button>
+          </div>
+        </label>
+        <label class="field">
+          <span>Tên hiển thị <em>(tuỳ chọn)</em></span>
+          <input id="ws-input-name" name="name" value="${esc(curName)}" placeholder="Để trống sẽ dùng tên thư mục" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="ask-buttons">
+        <button type="button" class="btn" value="cancel">Huỷ</button>
+        <button type="submit" class="btn primary" value="ok">Thêm workspace</button>
+      </div>
+    </form>`;
+
+    const form = d.querySelector("form");
+    const pathInput = d.querySelector("#ws-input-path");
+    const nameInput = d.querySelector("#ws-input-name");
+    const list = d.querySelector(".ws-folder-list");
+
+    nameInput.addEventListener("input", () => {
+      userEditedName = true;
+    });
+
+    pathInput.addEventListener("input", () => {
+      if (!userEditedName) {
+        nameInput.value = baseName(pathInput.value);
+      }
+    });
+
+    d.querySelector(".ws-goto-btn").addEventListener("click", async () => {
+      const p = pathInput.value.trim();
+      if (!p) return;
+      await loadDir(p);
+      renderDialog(currentPath, nameInput.value);
+    });
+
+    d.querySelectorAll(".ws-root-btn, .ws-home-btn, .ws-up-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const p = btn.dataset.path;
+        if (!p) return;
+        await loadDir(p);
+        renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
+      });
+    });
+
+    list.querySelectorAll(".ws-folder-item").forEach(item => {
+      item.addEventListener("click", () => {
+        list.querySelectorAll(".ws-folder-item").forEach(i => i.classList.remove("selected"));
+        item.classList.add("selected");
+        pathInput.value = item.dataset.path;
+        if (!userEditedName) nameInput.value = item.dataset.name;
+      });
+      item.addEventListener("dblclick", async () => {
+        await loadDir(item.dataset.path);
+        renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
+      });
+      item.addEventListener("keydown", async ev => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          await loadDir(item.dataset.path);
+          renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
+        } else if (ev.key === "ArrowDown") {
+          ev.preventDefault();
+          const next = item.nextElementSibling;
+          if (next && next.classList.contains("ws-folder-item")) next.focus();
+        } else if (ev.key === "ArrowUp") {
+          ev.preventDefault();
+          const prev = item.previousElementSibling;
+          if (prev && prev.classList.contains("ws-folder-item")) prev.focus();
+        }
+      });
+    });
+
+    d.querySelector('button[value="cancel"]').addEventListener("click", () => d.close("cancel"));
+
+    form.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      if (!form.reportValidity()) return;
+      const targetPath = pathInput.value.trim();
+      const targetName = nameInput.value.trim() || undefined;
+      try {
+        const ws = await api.addWorkspace(targetPath, targetName);
+        d.close("ok");
+        await loadWorkspaces(ws.id);
+        toast(`Đã thêm ${ws.name}`, "good");
+      } catch (err) {
+        toast(`Không thêm được: ${err.message}`, "bad");
+      }
+    });
+  }
+
+  renderDialog(currentPath, baseName(currentPath));
+  d.addEventListener("close", () => {
+    d.classList.remove("ws-dialog");
+  }, { once: true });
+  d.showModal();
 }
 
 el.form.addEventListener("submit", async ev => {

@@ -340,6 +340,8 @@ a per-role sandbox is the planned upgrade.
 | `GET /store` | base + catalog roles with `installed` (`"base"` \| `"store"` \| `false`) and `updateAvailable` |
 | `POST /store/roles/:id/install` · `DELETE /store/roles/:id` | install or update / uninstall a store role |
 | `GET /roles` | installed roles (`id, name, description, owns`) |
+| `GET /fs/drives` | list drive roots (`{roots, home}`) |
+| `POST /fs/browse` `{path?}` | browse folders only (`{current, parent, home, roots, folders, error?}`) |
 | `GET /workspaces` · `POST /workspaces {path, name?}` | list / register a workspace |
 | `PATCH /workspaces/:id {name}` | rename a workspace |
 | `GET /workspaces/:id/config` · `/runs` · `/approvals` | team + limits / run history / pending approvals |

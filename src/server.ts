@@ -13,6 +13,7 @@ import { loadRole, roleIds } from "./library.ts";
 import { createPiRunnerFactory } from "./pi-runner.ts";
 import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
+import { browseDirectory, getDrives } from "./fs-browse.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -181,6 +182,20 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     }
     if (m === "GET" && url.pathname === "/roles") {
       return json(200, roleIds().map(id => { const r = loadRole(id); return { id, name: r.meta.name, description: r.meta.description, owns: r.meta.owns }; }));
+    }
+    if (m === "GET" && url.pathname === "/fs/drives") {
+      return json(200, getDrives());
+    }
+    if (m === "POST" && url.pathname === "/fs/browse") {
+      const b = await body(req);
+      try {
+        return json(200, browseDirectory(typeof b.path === "string" ? b.path : undefined));
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (msg === "folder not found") throw new HttpError(404, msg);
+        if (msg === "not a folder") throw new HttpError(400, msg);
+        throw new HttpError(400, msg);
+      }
     }
     if (m === "GET" && url.pathname === "/workspaces") return json(200, store.list());
     if (m === "POST" && url.pathname === "/workspaces") {
