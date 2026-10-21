@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startServer } from "../src/server.ts";
-import { browseDirectory } from "../src/fs-browse.ts";
+import { browseDirectory, clearDrivesCache, getDrives } from "../src/fs-browse.ts";
 import { fakeFactory, never, sleep } from "./helpers/fake-runner.ts";
 import type { Router } from "../src/router.ts";
 import type { TeamEvent } from "../src/types.ts";
@@ -81,6 +81,10 @@ test("renames workspace via PATCH /workspaces/:id", async () => {
 
     assert.equal((await api("PATCH", `/workspaces/${ws.id}`, { name: "   " })).status, 400);
     assert.equal((await api("PATCH", `/workspaces/${ws.id}`, {})).status, 400);
+    assert.equal((await api("PATCH", `/workspaces/${ws.id}`, { name: "a".repeat(81) })).status, 400, "name > 80 chars rejected");
+    assert.equal((await api("PATCH", `/workspaces/${ws.id}`, { name: "Bad\x00Name" })).status, 400, "null byte rejected");
+    assert.equal((await api("PATCH", `/workspaces/${ws.id}`, { name: "Bad\x1fName" })).status, 400, "control char rejected");
+    assert.equal((await api("PATCH", `/workspaces/${ws.id}`, { name: "Bad\x7fName" })).status, 400, "delete char rejected");
     assert.equal((await api("PATCH", "/workspaces/unknown-id-xyz", { name: "Valid" })).status, 404);
 
     const nonJson = await fetch(`${srv.url}/workspaces/${ws.id}`, { method: "PATCH", headers: { "content-type": "text/plain" }, body: "name=foo" });
@@ -163,9 +167,11 @@ test("fs endpoints: drives and browse directory", async () => {
 
     const missing = await api("POST", "/fs/browse", { path: join(base, "not-exist-xyz") });
     assert.equal(missing.status, 404);
+    assert.equal(missing.json.error, "folder not found or not a directory");
 
     const notDir = await api("POST", "/fs/browse", { path: join(base, "file.txt") });
-    assert.equal(notDir.status, 400);
+    assert.equal(notDir.status, 404);
+    assert.equal(notDir.json.error, "folder not found or not a directory");
 
     const def = await api("POST", "/fs/browse", {});
     assert.equal(def.status, 200);
@@ -180,9 +186,65 @@ test("fs browse handles permission error gracefully", async () => {
     err.code = "EACCES";
     throw err;
   };
-  const res = browseDirectory(target, fakeReaddir);
+  const res = await browseDirectory(target, fakeReaddir);
   assert.deepEqual(res.folders, []);
   assert.equal(res.error, "permission denied");
+});
+
+test("request body exceeding 1MB returns 413 payload too large", async () => {
+  const { srv, ws } = await setup(async () => "ok");
+  try {
+    const huge = JSON.stringify({ text: "x".repeat(1024 * 1024 + 10) });
+    const res = await fetch(`${srv.url}/workspaces/${ws.id}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: huge,
+    });
+    assert.equal(res.status, 413);
+    const json = await res.json() as any;
+    assert.equal(json.error, "payload too large");
+  } finally { await srv.close(); }
+});
+
+test("rejects UNC and device paths in /fs/browse and /workspaces", async () => {
+  const { srv, api } = await setup(async () => "ok");
+  try {
+    if (process.platform === "win32") {
+      const b1 = await api("POST", "/fs/browse", { path: "\\\\server\\share" });
+      assert.equal(b1.status, 400);
+      assert.match(b1.json.error, /UNC and device paths are not allowed|invalid Windows drive path/);
+
+      const b2 = await api("POST", "/fs/browse", { path: "//server/share" });
+      assert.equal(b2.status, 400);
+
+      const w1 = await api("POST", "/workspaces", { path: "\\\\server\\share" });
+      assert.equal(w1.status, 400);
+
+      const w2 = await api("POST", "/workspaces", { path: "//server/share" });
+      assert.equal(w2.status, 400);
+    }
+  } finally { await srv.close(); }
+});
+
+test("drives cache with 60s TTL and browseDirectory truncated at 2000 folders", async () => {
+  clearDrivesCache();
+  const d1 = getDrives(1000);
+  const d2 = getDrives(1000 + 30_000);
+  assert.equal(d1, d2, "within 60s returns identical cached object reference");
+  const d3 = getDrives(1000 + 61_000);
+  assert.notEqual(d1, d3, "after 60s cache expires and recomputes");
+
+  const target = tmp("trunc-test-");
+  const fakeReaddir: any = async () => {
+    const arr = [];
+    for (let i = 0; i < 2050; i++) {
+      arr.push({ name: `folder-${i}`, isDirectory: () => true, isSymbolicLink: () => false });
+    }
+    return arr;
+  };
+  const res = await browseDirectory(target, fakeReaddir);
+  assert.equal(res.folders.length, 2000);
+  assert.equal(res.truncated, true);
 });
 
 test("message starts run, SSE streams events, run is indexed and replayable", async () => {

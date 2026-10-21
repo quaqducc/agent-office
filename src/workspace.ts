@@ -4,6 +4,15 @@ import { join, resolve } from "node:path";
 import { DEFAULT_LIMITS } from "./config.ts";
 import { roleIds } from "./library.ts";
 import type { Limits } from "./types.ts";
+import { assertSafeWindowsPath } from "./fs-browse.ts";
+
+export function validateWorkspaceName(name: string): string {
+  const label = name?.trim();
+  if (!label) throw new Error("name is required");
+  if (label.length > 80) throw new Error("name must be 80 characters or less");
+  if (/[\x00-\x1f\x7f]/.test(label)) throw new Error("name contains invalid control characters");
+  return label;
+}
 
 export interface Workspace { id: string; name: string; path: string }
 
@@ -54,8 +63,7 @@ export class WorkspaceStore {
   }
 
   rename(id: string, name: string): Workspace {
-    const label = name?.trim();
-    if (!label) throw new Error("name is required");
+    const label = validateWorkspaceName(name);
     const all = this.list();
     const found = all.find(w => w.id === id);
     if (!found) throw new Error(`unknown workspace ${id}`);
@@ -69,15 +77,16 @@ export class WorkspaceStore {
   add(path: string, name?: string): Workspace {
     // pasted paths often carry quotes ("Copy as path") or stray spaces
     const cleaned = path.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+    assertSafeWindowsPath(cleaned);
     const abs = resolve(cleaned);
+    assertSafeWindowsPath(abs);
     if (!cleaned || !existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`${cleaned || "(empty)"} is not a folder`);
     const all = this.list();
     const found = all.find(w => w.path.toLowerCase() === abs.toLowerCase());
     if (found) {
-      const label = name?.trim();
-      return label ? this.rename(found.id, label) : found;
+      return name !== undefined && name !== null ? this.rename(found.id, name) : found;
     }
-    const label = name?.trim() || abs.split(/[\\/]/).filter(Boolean).pop() || "workspace";
+    const label = name !== undefined && name !== null ? validateWorkspaceName(name) : (abs.split(/[\\/]/).filter(Boolean).pop() || "workspace");
     const ws: Workspace = { id: `${slug(label)}-${createHash("sha1").update(abs.toLowerCase()).digest("hex").slice(0, 6)}`, name: label, path: abs };
     for (const d of ["runs", "sessions"]) mkdirSync(join(companyDir(ws), d), { recursive: true });
     writeFileSync(this.file, JSON.stringify([...all, ws], null, 2));

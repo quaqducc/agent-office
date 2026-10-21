@@ -108,8 +108,20 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   }
 
   async function body(req: IncomingMessage): Promise<any> {
-    let s = "";
-    for await (const chunk of req) s += chunk;
+    let size = 0;
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buf.length;
+      if (size > 1024 * 1024) {
+        req.pause();
+        req.on("data", () => {});
+        req.resume();
+        throw new HttpError(413, "payload too large");
+      }
+      chunks.push(buf);
+    }
+    const s = Buffer.concat(chunks).toString("utf8");
     if (!s) return {};
     try { return JSON.parse(s); } catch { throw new HttpError(400, "invalid JSON body"); }
   }
@@ -199,11 +211,10 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     if (m === "POST" && url.pathname === "/fs/browse") {
       const b = await body(req);
       try {
-        return json(200, browseDirectory(typeof b.path === "string" ? b.path : undefined));
+        return json(200, await browseDirectory(typeof b.path === "string" ? b.path : undefined));
       } catch (e) {
         const msg = (e as Error).message;
-        if (msg === "folder not found") throw new HttpError(404, msg);
-        if (msg === "not a folder") throw new HttpError(400, msg);
+        if (msg === "folder not found or not a directory") throw new HttpError(404, msg);
         throw new HttpError(400, msg);
       }
     }
@@ -292,10 +303,11 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   const server = createServer((req, res) => {
     handle(req, res).catch(e => {
       const status = e instanceof HttpError || e instanceof StoreError ? e.status : 500;
-      if (!res.headersSent) res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+      if (!res.headersSent) res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...(status === 413 ? { connection: "close" } : {}) });
       const payload: any = { error: (e as Error).message };
       if (e instanceof HttpError && e.extra) Object.assign(payload, e.extra);
       res.end(JSON.stringify(payload));
+      if (status === 413) req.destroy();
     });
   });
   await new Promise<void>((resolve, reject) => {

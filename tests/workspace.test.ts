@@ -48,6 +48,32 @@ test("run index round-trips and updates by runId", () => {
   assert.deepEqual(store.runs(ws), [{ runId: "r1", startedAt: "t0", endedAt: "t1", status: "done", firstMessage: "hi", tokens: 42 }]);
 });
 
+test("rejects UNC and device paths on Windows", () => {
+  const store = new WorkspaceStore(tmp("data-"));
+  if (process.platform === "win32") {
+    assert.throws(() => store.add("\\\\server\\share"), /UNC and device paths are not allowed|invalid Windows drive path/);
+    assert.throws(() => store.add("//server/share"), /UNC and device paths are not allowed|invalid Windows drive path/);
+    assert.throws(() => store.add("\\\\?\\C:\\test"), /UNC and device paths are not allowed|invalid Windows drive path/);
+    assert.throws(() => store.add("\\\\.\\pipe\\test"), /UNC and device paths are not allowed|invalid Windows drive path/);
+  }
+});
+
+test("rename and add reject name exceeding 80 characters or containing control characters", () => {
+  const store = new WorkspaceStore(mkdtempSync(join(tmpdir(), "ws-data-")));
+  const folder = mkdtempSync(join(tmpdir(), "ws-sec-"));
+  const ws = store.add(folder, "Valid Name");
+
+  // Name > 80 chars
+  const tooLong = "a".repeat(81);
+  assert.throws(() => store.rename(ws.id, tooLong), /80 characters or less/);
+  assert.throws(() => store.add(folder, tooLong), /80 characters or less/);
+
+  // Control characters
+  assert.throws(() => store.rename(ws.id, "Invalid\x00Name"), /invalid.*characters/);
+  assert.throws(() => store.rename(ws.id, "Invalid\x1fName"), /invalid.*characters/);
+  assert.throws(() => store.rename(ws.id, "Invalid\x7fName"), /invalid.*characters/);
+});
+
 test("rejects missing folder", () => {
   const store = new WorkspaceStore(tmp("data-"));
   assert.throws(() => store.add(join(tmpdir(), "definitely-missing-xyz-123")), /not a folder/);
