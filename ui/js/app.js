@@ -385,7 +385,6 @@ function stopReplay() {
 function goLive() {
   app.gen++;
   stopReplay();
-  cancelAllWalks(el.office);
   app.mode = "live";
   resetPanels();
   app.fxDone.live = app.live.effects.length;
@@ -443,6 +442,7 @@ async function addWorkspace() {
   let folders = [];
   let errorMsg = null;
   let userEditedName = false;
+  let browseSeq = 0;
 
   function baseName(p) {
     const s = (p ?? "").trim().replace(/^["']|["']$/g, "").replace(/[\\/]+$/, "");
@@ -451,17 +451,22 @@ async function addWorkspace() {
   }
 
   async function loadDir(target) {
+    const seq = ++browseSeq;
     try {
       const clean = target ? target.trim().replace(/^["']|["']$/g, "").trim() : undefined;
       const res = await api.fsBrowse(clean);
+      if (seq !== browseSeq || !d.open) return false;
       currentPath = res.current;
       parentPath = res.parent;
       roots = res.roots || [];
       home = res.home || "";
       folders = res.folders || [];
       errorMsg = res.error || null;
+      return !res.error;
     } catch (e) {
+      if (seq !== browseSeq || !d.open) return false;
       errorMsg = e.message;
+      return false;
     }
   }
 
@@ -524,6 +529,11 @@ async function addWorkspace() {
     const nameInput = d.querySelector("#ws-input-name");
     const list = d.querySelector(".ws-folder-list");
 
+    function focusFirstItem() {
+      const first = d.querySelector(".ws-folder-item:first-of-type") || d.querySelector(".ws-folder-list");
+      first?.focus();
+    }
+
     nameInput.addEventListener("input", () => {
       userEditedName = true;
     });
@@ -534,19 +544,32 @@ async function addWorkspace() {
       }
     });
 
-    d.querySelector(".ws-goto-btn").addEventListener("click", async () => {
+    async function triggerBrowseInput() {
       const p = pathInput.value.trim();
       if (!p) return;
-      await loadDir(p);
-      renderDialog(currentPath, nameInput.value);
+      const ok = await loadDir(p);
+      if (!d.open) return;
+      renderDialog(ok ? currentPath : p, nameInput.value);
+      if (ok) focusFirstItem();
+    }
+
+    pathInput.addEventListener("keydown", async ev => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        await triggerBrowseInput();
+      }
     });
+
+    d.querySelector(".ws-goto-btn").addEventListener("click", triggerBrowseInput);
 
     d.querySelectorAll(".ws-root-btn, .ws-home-btn, .ws-up-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
         const p = btn.dataset.path;
         if (!p) return;
-        await loadDir(p);
+        const ok = await loadDir(p);
+        if (!d.open) return;
         renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
+        if (ok) focusFirstItem();
       });
     });
 
@@ -558,14 +581,18 @@ async function addWorkspace() {
         if (!userEditedName) nameInput.value = item.dataset.name;
       });
       item.addEventListener("dblclick", async () => {
-        await loadDir(item.dataset.path);
+        const ok = await loadDir(item.dataset.path);
+        if (!d.open) return;
         renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
+        if (ok) focusFirstItem();
       });
       item.addEventListener("keydown", async ev => {
         if (ev.key === "Enter") {
           ev.preventDefault();
-          await loadDir(item.dataset.path);
+          const ok = await loadDir(item.dataset.path);
+          if (!d.open) return;
           renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
+          if (ok) focusFirstItem();
         } else if (ev.key === "ArrowDown") {
           ev.preventDefault();
           const next = item.nextElementSibling;

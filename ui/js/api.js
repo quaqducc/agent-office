@@ -7,7 +7,11 @@ async function call(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error ?? `${r.status} ${r.statusText}`);
+  if (!r.ok) {
+    const err = new Error(data.error ?? `${r.status} ${r.statusText}`);
+    Object.assign(err, data);
+    throw err;
+  }
   return data;
 }
 
@@ -18,7 +22,6 @@ export const api = {
   workspaces: () => call("GET", "/workspaces"),
   addWorkspace: (path, name) => call("POST", "/workspaces", { path, name }),
   renameWorkspace: (id, name) => call("PATCH", `/workspaces/${enc(id)}`, { name }),
-  fsDrives: () => call("GET", "/fs/drives"),
   fsBrowse: path => call("POST", "/fs/browse", { path }),
   offices: () => call("GET", "/offices"),
   config: id => call("GET", `/workspaces/${enc(id)}/config`),

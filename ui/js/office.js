@@ -52,10 +52,6 @@ export class RoleWalkQueue {
     this.queues = new Map();
   }
 
-  isRoleBusy(role) {
-    return this.active.has(role);
-  }
-
   enqueue(role, task) {
     if (this.active.has(role)) {
       if (!this.queues.has(role)) this.queues.set(role, []);
@@ -154,7 +150,6 @@ export function renderOffice(el, state, opts) {
   const roles = Object.keys(state.roles);
   const rooms = opts.rooms;
   el._rooms = rooms;
-  el._names = opts.names;
   const key = `${roles.join(",")}:${JSON.stringify(rooms ?? [])}`;
   if (el.dataset.roles !== key) build(el, roles, opts);
   const links = state.runStatus === "active" ? activeLinks(state) : [];
@@ -191,9 +186,9 @@ export function renderOffice(el, state, opts) {
 function build(el, roles, opts) {
   const rooms = opts.rooms;
   el._rooms = rooms;
-  el._names = opts.names;
   el.dataset.roles = `${roles.join(",")}:${JSON.stringify(rooms ?? [])}`;
   const desks = deskLayout(roles, rooms);
+  el._desks = desks;
   el.innerHTML = `<div class="scene" style="width:${SCENE.w}px;height:${SCENE.h}px">
     ${sceneSvg({ zones: new Set(desks.map(d => d.zone)), rooms })}
     <div class="user-spot" style="left:${ENTRANCE.x}px;top:${ENTRANCE.y}px"><div class="halo"></div><div class="char">${sprite("user")}</div><div class="plate">Bạn</div><span class="bubble"></span></div>
@@ -277,9 +272,8 @@ async function animatePath(actor, points, totalLegDuration, signal) {
 /** Execute a full walk: leave desk, walk to target, speak bubble, walk back. */
 async function runWalk(el, walker, target, fx, speed) {
   const fxLayer = el.querySelector(".fx-layer") || el;
-  const roles = (el.dataset.roles ? el.dataset.roles.split(":")[0].split(",") : []).filter(Boolean);
   const rooms = el._rooms;
-  const desks = deskLayout(roles, rooms);
+  const desks = el._desks || deskLayout((el.dataset.roles ? el.dataset.roles.split(":")[0].split(",") : []).filter(Boolean), rooms);
 
   const forwardPath = findWalkPath(walker, target, desks, rooms);
   if (forwardPath.length < 2) {

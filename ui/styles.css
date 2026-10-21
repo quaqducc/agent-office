@@ -361,17 +361,6 @@ h1, h2, h3 { margin: 0; }
   to { transform: translateX(-50%) scale(1); opacity: 1; }
 }
 
-/* live links between roles */
-.links { position: absolute; inset: 0; width: 1280px; height: 720px; z-index: 1; pointer-events: none; overflow: visible; }
-.link { fill: none; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 1 13; animation: flow .9s linear infinite; }
-.link.task { stroke: var(--accent); }
-.link.queued { stroke: var(--idle); animation-duration: 2s; }
-.link.approval { stroke: var(--approval); }
-.link-end { opacity: .3; } .link-end.task { fill: var(--accent); } .link-end.queued { fill: var(--idle); } .link-end.approval { fill: var(--approval); }
-@keyframes flow { to { stroke-dashoffset: -14; } }
-.trail { fill: none; stroke-width: 6; stroke-linecap: round; stroke: var(--accent); }
-.trail.checkpoint { stroke: var(--teal); } .trail.approval { stroke: var(--approval); } .trail.reply { stroke: var(--accent); }
-
 /* stations */
 .desk {
   position: absolute; width: 150px; height: 160px; margin: -98px 0 0 -75px; z-index: 2;
@@ -469,15 +458,6 @@ h1, h2, h3 { margin: 0; }
 
 /* effects */
 .fx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
-.fx { position: absolute; left: 0; top: 0; offset-rotate: 0deg; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.fx .icon { width: 44px; height: 36px; filter: drop-shadow(0 4px 2px rgba(0, 0, 0, .3)); }
-.fx .icon svg { width: 100%; height: 100%; display: block; }
-.fx .label {
-  font: 600 18px/1.25 var(--font-ui); max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: var(--ink); color: var(--panel); padding: 4px 12px; border-radius: 999px; box-shadow: var(--shadow-md);
-}
-.fx-approval .label { background: var(--approval); color: #fff; }
-.fx-checkpoint .label { background: var(--teal); color: #fff; }
 
 /* approvals dock (overlay — never shifts layout) */
 .approvals {

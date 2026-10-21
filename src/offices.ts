@@ -1,8 +1,5 @@
-export interface RoomDef {
-  id: string;
-  name: string;
-  roles: string[];
-}
+import type { RoomDef } from "./workspace.js";
+export type { RoomDef };
 
 export interface OfficeTemplate {
   id: string;

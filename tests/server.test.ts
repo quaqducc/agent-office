@@ -187,15 +187,9 @@ test("PUT /workspaces/:id/config deduplicates roles and rejects invalid rooms", 
   } finally { await srv.close(); }
 });
 
-test("fs endpoints: drives and browse directory", async () => {
+test("fs endpoints: browse directory", async () => {
   const { srv, api } = await setup(async () => "ok");
   try {
-    const drives = await api("GET", "/fs/drives");
-    assert.equal(drives.status, 200);
-    assert.ok(Array.isArray(drives.json.roots));
-    assert.ok(drives.json.roots.length > 0);
-    assert.ok(typeof drives.json.home === "string");
-
     const base = tmp("fs-browse-");
     mkdirSync(join(base, "sub1"));
     mkdirSync(join(base, "sub2"));

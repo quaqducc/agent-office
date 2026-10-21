@@ -13,7 +13,7 @@ import { loadRole, roleIds } from "./library.ts";
 import { createPiRunnerFactory } from "./pi-runner.ts";
 import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
-import { browseDirectory, getDrives } from "./fs-browse.ts";
+import { browseDirectory } from "./fs-browse.ts";
 import { OFFICE_TEMPLATES } from "./offices.ts";
 
 export interface ServerOptions {
@@ -211,9 +211,6 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     if (m === "GET" && url.pathname === "/offices") {
       return json(200, OFFICE_TEMPLATES);
     }
-    if (m === "GET" && url.pathname === "/fs/drives") {
-      return json(200, getDrives());
-    }
     if (m === "POST" && url.pathname === "/fs/browse") {
       const b = await body(req);
       try {
@@ -247,8 +244,6 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         if (typeof b.name !== "string" || !b.name.trim()) throw new HttpError(400, "name is required");
         try {
           const updated = store.rename(parts[1], b.name);
-          const existing = ctxs.get(parts[1]);
-          if (existing) existing.ws = updated;
           return json(200, updated);
         } catch (e) {
           const msg = (e as Error).message;
@@ -273,9 +268,6 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         }
         try {
           const cfg = store.saveConfig(ws, { roles: cleanRoles, rooms: b.rooms, template: b.template });
-          if (existing && !existing.router.activeRunId()) {
-            ctxFor(parts[1]);
-          }
           return json(200, cfg);
         } catch (e) {
           throw new HttpError(400, (e as Error).message);

@@ -158,11 +158,11 @@ test("RoleWalkQueue ensures single presence per role and enforces concurrency li
 
   // 1. Initial walk allowed
   assert.equal(q.enqueue("manager", { id: 1 }), "running");
-  assert.ok(q.isRoleBusy("manager"));
+  assert.ok(q.active.has("manager"));
 
   // 2. Single presence: Same role cannot walk twice concurrently, gets queued
   assert.equal(q.enqueue("manager", { id: 2 }), "queued");
-  assert.ok(q.isRoleBusy("manager"));
+  assert.ok(q.active.has("manager"));
 
   // 3. Different roles can walk up to maxConcurrent (3)
   assert.equal(q.enqueue("developer", { id: 3 }), "running");
@@ -174,16 +174,16 @@ test("RoleWalkQueue ensures single presence per role and enforces concurrency li
   // 5. Finishing manager dequeues its next queued task and stays active
   const next = q.finish("manager");
   assert.deepEqual(next, { id: 2 });
-  assert.ok(q.isRoleBusy("manager"));
+  assert.ok(q.active.has("manager"));
 
   // Finishing the second task makes manager idle
   const none = q.finish("manager");
   assert.equal(none, null);
-  assert.equal(q.isRoleBusy("manager"), false);
+  assert.equal(q.active.has("manager"), false);
 
   // Clear resets everything
   q.clear();
-  assert.equal(q.isRoleBusy("developer"), false);
+  assert.equal(q.active.has("developer"), false);
 });
 
 test("walkDuration scales accurately with replay speed and respects accessibility", () => {

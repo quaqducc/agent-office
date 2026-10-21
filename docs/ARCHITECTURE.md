@@ -340,13 +340,12 @@ a per-role sandbox is the planned upgrade.
 | `GET /store` | base + catalog roles with `installed` (`"base"` \| `"store"` \| `false`) and `updateAvailable` |
 | `POST /store/roles/:id/install` · `DELETE /store/roles/:id` | install or update / uninstall a store role |
 | `GET /roles` | installed roles (`id, name, description, owns`) |
-| `GET /fs/drives` | list drive roots (`{roots, home}`) |
 | `POST /fs/browse` `{path?}` | browse folders only (`{current, parent, home, roots, folders, error?}`) |
 | `GET /offices` | preset office templates (`startup-mvp`, `software-house`, `content-marketing`, `research-lab`) |
 | `GET /workspaces` · `POST /workspaces {path, name?}` | list / register a workspace |
 | `PATCH /workspaces/:id {name}` | rename a workspace |
 | `GET /workspaces/:id/config` · `/runs` · `/approvals` | team + limits / run history / pending approvals |
-| `PUT /workspaces/:id/config` `{template?, roles?, rooms?, limits?}` | update workspace roles, template, and rooms (validates installed roles; rebuilds router context when idle) |
+| `PUT /workspaces/:id/config` `{roles: string[], template?: string, rooms?: RoomDef[]}` | update workspace roles, template, and rooms (validates installed roles; rebuilds router context when idle) |
 | `POST /workspaces/:id/messages {text}` | message the Manager (starts or joins a run) |
 | `GET /runs/:runId/events` · `POST /runs/:runId/stop` | full event log of a run / stop a run |
 | `POST /checkpoints/:id/reply {decision: approve\|reject\|edit, note}` | the user's answer to an approval |
@@ -371,14 +370,14 @@ a per-role sandbox is the planned upgrade.
   layout) are unit-tested under Node in `tests/ui-*.test.ts`. The DOM code is verified in a browser.
 - **Office customization & dynamic rooms (`layout.js`, `scene.js`, `office-dialog.js`).**
   Workspaces support dynamic 1–6 room configurations and role assignments stored in `<workspace>/.company/config.json`.
-  Users can pick from preset templates (`/offices`) or customize rooms in the UI. `deskLayout` computes
-  desk coordinates dynamically per room without overlap (>= 140px Euclidean spacing) while keeping the entrance and corridor at `y >= 480`.
+  Users can pick from preset templates (`/offices`) or customize rooms in the UI. `deskLayout` dynamically computes
+  desk coordinates per room using proportional step scaling (`step = Math.min(maxStep, maxSpan / (k - 1))`), automatic two-row distribution for larger groups, strict room boundary containment, and room capacity enforcement (`getRoomCapacity`) while keeping entrance and corridors accessible.
 - **Character walk animations & interaction speech bubbles (`office.js`, `layout.js`, `sprites.js`).**
   Replaces static link arrows and flying envelope FX with pixel art walking characters and interaction speech bubbles:
   1. `findWalkPath(fromRole, toRole, desks, rooms)` calculates waypoints through room doors and central corridors (or a direct line for peers in the same room).
-  2. Walk cycles use 2-frame pixel art foot stepping with horizontal sprite flipping (`transform: scaleX(-1)`) on leftward movement.
+  2. Walk cycles use CSS translation along path waypoints with a gentle vertical bobbing animation and horizontal sprite flipping (`transform: scaleX(-1)`) on leftward movement.
   3. Single presence invariant: `RoleWalkQueue` strictly ensures a role never has duplicate characters on screen, queueing subsequent walk tasks and hiding the desk character (`.desk.away`) while away.
-  4. Interactions: task handoff (creator walks to assignee), task completion/failure (assignee walks result back), checkpoints and approvals (role walks to Manager, displaying `wait` or `need` bubbles), and manager replies (Manager walks to user at `ENTRANCE`).
+  4. Interactions: task handoff (creator walks to assignee), task completion/failure (assignee walks result back), checkpoints and approvals (role walks to Manager or User at `ENTRANCE`, displaying `wait` or `need` bubbles), and manager replies (Manager walks to user at `ENTRANCE`).
   5. Speed scaling & accessibility: replay speeds (x1 ~1.2s/leg, x4 ~300ms, x16 ~75ms, instant/0 flashes bubble directly without walking), respects `prefers-reduced-motion`, limits concurrent walkers to 3–4 for performance, and instantly cancels running animations via `cancelAllWalks` when switching back to live mode.
 - **Rendering safety.** Model text is escaped (`util.esc`) or rendered with the safe Markdown
   wrapper: raw HTML shows as text, only http(s) links, no images.
