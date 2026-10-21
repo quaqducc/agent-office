@@ -1,0 +1,11 @@
+# Same bytes on every OS: the role store verifies catalog files by sha256.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

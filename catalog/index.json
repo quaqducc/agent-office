@@ -1,0 +1,1841 @@
+{
+  "format": 1,
+  "roles": [
+    {
+      "id": "ai-engineer",
+      "name": "AI Engineer",
+      "description": "LLM apps, RAG, agents, evals, prompt and cost optimization.",
+      "owns": "LLM / RAG / agents / evals",
+      "skills": [
+        "eval-harness",
+        "cost-aware-llm-pipeline",
+        "iterative-retrieval",
+        "agent-harness-construction",
+        "rag-implementation",
+        "prompt-engineering-patterns",
+        "llm-evaluation"
+      ],
+      "files": [
+        {
+          "path": "roles/ai-engineer.md",
+          "sha256": "8cbdce993cd8f97bc9331369cd65c0ddd935b2ef7033873b19d3b702628b2ccd",
+          "size": 492
+        },
+        {
+          "path": "personas/engineering-ai-engineer.md",
+          "sha256": "f25a69aad25acd35dd1d62e33d5a814f4a26b075d90f968b4d778452e53924d8",
+          "size": 7383
+        }
+      ]
+    },
+    {
+      "id": "architect",
+      "name": "Software Architect",
+      "description": "System design, interfaces, data model, ADRs.",
+      "owns": "System design, data model, interfaces",
+      "skills": [
+        "api-and-interface-design",
+        "documentation-and-adrs"
+      ],
+      "files": [
+        {
+          "path": "roles/architect.md",
+          "sha256": "6ebf67833fa051dd8a2b7aa166499d3220b8e9b10682bb7cd34df1ebd37c2642",
+          "size": 472
+        },
+        {
+          "path": "personas/engineering-software-architect.md",
+          "sha256": "b85121691776147bacde26673e68fbbacd6a7f0816d1ca8e203c264d25ce1d30",
+          "size": 6485
+        }
+      ]
+    },
+    {
+      "id": "brainstormer",
+      "name": "Brainstormer",
+      "description": "Generates and sharpens ideas; explores options from user, business and tech angles.",
+      "owns": "Ideas and options",
+      "skills": [
+        "brainstorming",
+        "idea-refine",
+        "brainstorm-ideas-new"
+      ],
+      "files": [
+        {
+          "path": "roles/brainstormer.md",
+          "sha256": "509c6915814cc143d184f7549fdcbcc083c0f1e6e01910f39e4c92647bd8910b",
+          "size": 465
+        },
+        {
+          "path": "personas/product-trend-researcher.md",
+          "sha256": "69c8e54a9413ba411195e8d5274ee3cd88fa8cda18486db70c0f19ce374550a2",
+          "size": 10493
+        }
+      ]
+    },
+    {
+      "id": "business-strategist",
+      "name": "Business Strategist",
+      "description": "Business models, pricing, market sizing, competitors, unit economics.",
+      "owns": "Business model, pricing, market, competitors",
+      "skills": [
+        "lean-canvas",
+        "business-model",
+        "pricing-strategy",
+        "monetization-strategy",
+        "market-sizing",
+        "competitor-analysis",
+        "market-research"
+      ],
+      "files": [
+        {
+          "path": "roles/business-strategist.md",
+          "sha256": "592cdc96ac1eef640faff0611b52f2ca8f9644a2511c6cc21301305346dccdc5",
+          "size": 524
+        },
+        {
+          "path": "personas/business-strategist.md",
+          "sha256": "9314906805d8dee81c3e2d10cb93513a391731d9fceb2e4c936257005a144b92",
+          "size": 25296
+        }
+      ]
+    },
+    {
+      "id": "devops",
+      "name": "DevOps / SRE",
+      "description": "CI/CD, containers, deployment, observability, reliability.",
+      "owns": "Environment setup, install, run, deploy, CI",
+      "skills": [
+        "ci-cd-and-automation",
+        "observability-and-instrumentation",
+        "shipping-and-launch",
+        "docker-patterns",
+        "kubernetes-patterns"
+      ],
+      "files": [
+        {
+          "path": "roles/devops.md",
+          "sha256": "07769b2f281d7507c48db46e5e8ee29fcc7c8d9a76797a8d154099e423be9c7a",
+          "size": 481
+        },
+        {
+          "path": "personas/engineering-devops-automator.md",
+          "sha256": "dbb3d2518a4fff4df1930fd311ef6ffa96670d08b101567b7e241f941ced94c9",
+          "size": 13695
+        }
+      ]
+    },
+    {
+      "id": "marketing",
+      "name": "Marketing & Growth",
+      "description": "Positioning, launch, copy, SEO, conversion, pricing pages, social.",
+      "owns": "Go-to-market, copy, SEO",
+      "skills": [
+        "marketing-plan",
+        "launch",
+        "copywriting",
+        "seo-audit",
+        "ai-seo",
+        "cro",
+        "pricing",
+        "social"
+      ],
+      "files": [
+        {
+          "path": "roles/marketing.md",
+          "sha256": "2f59cef7f6e76e52754a5f3a12223109dcff4428591df3c6c93d02258a8ffa0d",
+          "size": 445
+        },
+        {
+          "path": "personas/marketing-growth-hacker.md",
+          "sha256": "6938b4fccaf4447e8c4b8fd071ce383a484cd3fb72583d87ac9835fa9741a7c7",
+          "size": 3055
+        }
+      ]
+    },
+    {
+      "id": "planner",
+      "name": "Planner",
+      "description": "Turns goals and specs into realistic, ordered task plans with acceptance criteria.",
+      "owns": "Task breakdown, schedule",
+      "skills": [
+        "spec-driven-development",
+        "planning-and-task-breakdown",
+        "sprint-plan",
+        "prioritization-frameworks"
+      ],
+      "files": [
+        {
+          "path": "roles/planner.md",
+          "sha256": "a7088527f816ee48230a4979023ba6e322f58fe4cbc06670ba4d1b68fbb2d3a8",
+          "size": 484
+        },
+        {
+          "path": "personas/project-manager-senior.md",
+          "sha256": "70fb27cab174c97375293311211d5563c5ac257fba274450d1ca9c05b540ef2d",
+          "size": 5308
+        }
+      ]
+    },
+    {
+      "id": "product-manager",
+      "name": "Product Manager",
+      "description": "PRDs, user stories, prioritization, success metrics.",
+      "owns": "Requirements, PRD, priorities",
+      "skills": [
+        "create-prd",
+        "user-stories",
+        "prioritize-features",
+        "north-star-metric",
+        "value-proposition"
+      ],
+      "files": [
+        {
+          "path": "roles/product-manager.md",
+          "sha256": "d3534a1edf95cb0aba22fcd00b8bb85473e9bdbbde53fb175b52d0d0c57640bb",
+          "size": 432
+        },
+        {
+          "path": "personas/product-manager.md",
+          "sha256": "4a3fe4661e72e5173877bcba7c362392181774b20efc27ac1789171e98676c9d",
+          "size": 22687
+        }
+      ]
+    },
+    {
+      "id": "reviewer",
+      "name": "Reviewer / QA",
+      "description": "Verifies delivered work with evidence: code review, tests, security.",
+      "owns": "Verifying delivered work, tests, security",
+      "skills": [
+        "code-review-and-quality",
+        "security-and-hardening",
+        "requesting-code-review"
+      ],
+      "files": [
+        {
+          "path": "roles/reviewer.md",
+          "sha256": "6692207b8b3e6093ac970fd0035c00a1af06bc7a695823711c922aced235bf28",
+          "size": 465
+        },
+        {
+          "path": "personas/testing-reality-checker.md",
+          "sha256": "6d32fcdb114233e13902ec6372d50293b120e85d490b5e81d372c29808f988a1",
+          "size": 10854
+        }
+      ]
+    },
+    {
+      "id": "ui-ux",
+      "name": "UI/UX Designer",
+      "description": "User flows, layout, visual design, front-end UI.",
+      "owns": "Screens, flows, front-end UI",
+      "skills": [
+        "frontend-design",
+        "frontend-ui-engineering",
+        "ui-ux-pro-max"
+      ],
+      "files": [
+        {
+          "path": "roles/ui-ux.md",
+          "sha256": "32ba22acdc6d0fcd1c0bc1782fee07f40519df2ce4a14eb907f0921d8604bfbe",
+          "size": 415
+        },
+        {
+          "path": "personas/design-ux-architect.md",
+          "sha256": "7d373da3fd204db3c830f28e03cdf85bcacd3858e38fbdad58489953f811c296",
+          "size": 16260
+        }
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "agent-harness-construction",
+      "source": "ecc",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/agent-harness-construction/.source",
+          "sha256": "0f1638df43ee5758053da7a80416b4d44480bd5c52f58601c2e9c42dabf2c88b",
+          "size": 4
+        },
+        {
+          "path": "skills/agent-harness-construction/SKILL.md",
+          "sha256": "e7fb390a6663b46ea5d3c2876753a5ce32ba3bad1889686b21a42894caa1742d",
+          "size": 2100
+        }
+      ]
+    },
+    {
+      "name": "ai-seo",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/ai-seo/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/ai-seo/SKILL.md",
+          "sha256": "8db51a80d71f252c9bfa547a666158a5d221b50c4fd4554c0575b11be9fd2cf0",
+          "size": 35851
+        },
+        {
+          "path": "skills/ai-seo/evals/evals.json",
+          "sha256": "0bcec784c9af432c52845822b2c2b4d9f01b653edc7f59333b93ae6f625904c9",
+          "size": 17529
+        },
+        {
+          "path": "skills/ai-seo/references/agent-defaults.md",
+          "sha256": "4f009f323b381553961914bf7d67755ee3c178dd10f1570f61fe306cd0054b21",
+          "size": 9344
+        },
+        {
+          "path": "skills/ai-seo/references/agent-readiness.md",
+          "sha256": "1f9b3e4646c6d50a17b6b5b34ca22b868518266f23664de3132cf519c72d7a9a",
+          "size": 8425
+        },
+        {
+          "path": "skills/ai-seo/references/ai-attribution.md",
+          "sha256": "accaf004e50fd92d16e5e1b57ce0aa5f5c0f88d1ba7bb2ce6939de29fe3e1728",
+          "size": 4302
+        },
+        {
+          "path": "skills/ai-seo/references/answer-accuracy.md",
+          "sha256": "9c9115a720c6891fc7e0122d465ed38643170b026fa461de5971feb642f0da57",
+          "size": 5705
+        },
+        {
+          "path": "skills/ai-seo/references/citations-vs-recommendations.md",
+          "sha256": "b020ff51abab6e9e2485a3bc2f7c94fd2ac9f03d555c2f637cfa3d141dd38b93",
+          "size": 12767
+        },
+        {
+          "path": "skills/ai-seo/references/content-patterns.md",
+          "sha256": "2aa584f93587c322f08697f2eedcb6b48fd79bccb75d1f0ae2072dfcc8c7c684",
+          "size": 12949
+        },
+        {
+          "path": "skills/ai-seo/references/content-types.md",
+          "sha256": "2323104990cb3057f3ce135c2b7bac71e5369992d5aeb24cec009c8f6d841d0b",
+          "size": 3558
+        },
+        {
+          "path": "skills/ai-seo/references/format-volatility.md",
+          "sha256": "235858ee4d820dd0b89d3c7ffc65f4f59c7904f63feef7d2fff78cc6818caddf",
+          "size": 7269
+        },
+        {
+          "path": "skills/ai-seo/references/linkedin-ai-citations.md",
+          "sha256": "2bd191703b543fc5f3ae36f5e367ed6d5504ad38e7446797cd3c5fe23ababd4b",
+          "size": 8747
+        },
+        {
+          "path": "skills/ai-seo/references/multilingual-and-commerce.md",
+          "sha256": "265c0de45b9d10ffaae74d11b9c4db9a6dc58247484d2fe7595ba16efc00f849",
+          "size": 4683
+        },
+        {
+          "path": "skills/ai-seo/references/okf.md",
+          "sha256": "4abcab5b8ee90b63c5d09c98387a8ec3cdb8f5df33e75d3b4b91eb817283bfd8",
+          "size": 5952
+        },
+        {
+          "path": "skills/ai-seo/references/platform-ranking-factors.md",
+          "sha256": "c6226b715875e4e7683c021b6aea437e4e92788b469b5aaf76097b2c9eaaa531",
+          "size": 14220
+        },
+        {
+          "path": "skills/ai-seo/references/positioning-and-consensus.md",
+          "sha256": "b7618247e57a4560c3785155c34de77adc232784b7dd91b2c44a77a73617b9b4",
+          "size": 7283
+        },
+        {
+          "path": "skills/ai-seo/references/prompt-portfolio.md",
+          "sha256": "11708d2315ef3a6df1fc1de6df8700d6229f7121479835784889f77548c7c12e",
+          "size": 6326
+        },
+        {
+          "path": "skills/ai-seo/references/youtube-ai-citations.md",
+          "sha256": "eee24cd9f377db5f59933c775a740f5ff7ece9f238b051157ba72531d9507a99",
+          "size": 4478
+        }
+      ]
+    },
+    {
+      "name": "api-and-interface-design",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/api-and-interface-design/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/api-and-interface-design/SKILL.md",
+          "sha256": "e83d34f52ff12dd8a7c5134cd7e8140ea4541ec65e204f8a1e4cd366e30c4192",
+          "size": 14886
+        }
+      ]
+    },
+    {
+      "name": "brainstorm-ideas-new",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/brainstorm-ideas-new/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/brainstorm-ideas-new/SKILL.md",
+          "sha256": "400e5e0760d6dc52bfe34953d90db6223df532ce720d7e85568696ab5c3d34d2",
+          "size": 2437
+        }
+      ]
+    },
+    {
+      "name": "brainstorming",
+      "source": "superpowers",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/brainstorming/.source",
+          "sha256": "7fe7e55a38dc9ef273e4de759aa49a013924d12c8cd03a596f9571dc0b748dc5",
+          "size": 12
+        },
+        {
+          "path": "skills/brainstorming/SKILL.md",
+          "sha256": "a32d2255354775aa124855aa7100cf276bea096fff4ebb3a0edf57be216e6c72",
+          "size": 17548
+        },
+        {
+          "path": "skills/brainstorming/scripts/frame-template.html",
+          "sha256": "6a8a4e58bd6a44b904e2e3c57de774481d909204597e1498de53f1b2fecc4c4e",
+          "size": 8094
+        },
+        {
+          "path": "skills/brainstorming/scripts/helper.js",
+          "sha256": "43c6d69954a46ec34a2a262bcc62a9a7e83e839c739f199cb72646d397c686e3",
+          "size": 5615
+        },
+        {
+          "path": "skills/brainstorming/scripts/server.cjs",
+          "sha256": "2d2961ea8d11f56c5f4c3a1a68d22709efa5d7601a2246d8c880774e7e9e8412",
+          "size": 25693
+        },
+        {
+          "path": "skills/brainstorming/scripts/start-server.sh",
+          "sha256": "a4e5ae84275bcaacd2f84345afeabe59cf7b00ba080e123da7cc1fb226f12847",
+          "size": 6908
+        },
+        {
+          "path": "skills/brainstorming/scripts/stop-server.sh",
+          "sha256": "0b5ccbbd57f62d3ed88993f7940b5ee0e5c0fc9b21c550c623da4f6292e47daf",
+          "size": 3263
+        },
+        {
+          "path": "skills/brainstorming/spec-document-reviewer-prompt.md",
+          "sha256": "95a0a195de9d984be2fffa95bab16fc8c563bc296a9cfc5e9c29cb3ece0d7457",
+          "size": 1747
+        },
+        {
+          "path": "skills/brainstorming/visual-companion.md",
+          "sha256": "6ffcb038b53254bd31debaa15e12dcd4ff24bd63d690e0b644ac6396701cf2e2",
+          "size": 13413
+        }
+      ]
+    },
+    {
+      "name": "business-model",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/business-model/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/business-model/SKILL.md",
+          "sha256": "515621fd8a41ecba5b7234d0d9e1e50185ba33805c4dd170b66364281f84acc8",
+          "size": 5784
+        }
+      ]
+    },
+    {
+      "name": "ci-cd-and-automation",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/ci-cd-and-automation/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/ci-cd-and-automation/SKILL.md",
+          "sha256": "a6ed8ed56456b01ff8314c44eefc69897d9905ae4e06bb2b7036286efb79b5f0",
+          "size": 11332
+        }
+      ]
+    },
+    {
+      "name": "code-review-and-quality",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/code-review-and-quality/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/code-review-and-quality/SKILL.md",
+          "sha256": "2db1e850379f255fd3091ef278cde24cd6c7d2ba23e360cc52ea522c40d4396e",
+          "size": 20976
+        }
+      ]
+    },
+    {
+      "name": "competitor-analysis",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/competitor-analysis/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/competitor-analysis/SKILL.md",
+          "sha256": "8e627fc7fba96f223ad9f8fd23c6033a429cc28f9e9ce2d672854c6851810c2b",
+          "size": 4814
+        }
+      ]
+    },
+    {
+      "name": "copywriting",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/copywriting/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/copywriting/SKILL.md",
+          "sha256": "13c580c2432a4499e9dfdcf5d553df7aa6589e90cf5bd869fb4fbde5caf9f567",
+          "size": 15520
+        },
+        {
+          "path": "skills/copywriting/evals/evals.json",
+          "sha256": "ccec86052a0edd8646d0e50e63c08e0e971f443d8f6e9178843a1629f79efdb0",
+          "size": 12995
+        },
+        {
+          "path": "skills/copywriting/references/ai-tells.md",
+          "sha256": "b98c3a19b3a75c714d69e80a0076e4c07244b0e833c2ce81ff2631224fb7f7b2",
+          "size": 20804
+        },
+        {
+          "path": "skills/copywriting/references/copy-frameworks.md",
+          "sha256": "352122944bf9e891ceb0e003adce41591d111e9d97057700626249919dfe430d",
+          "size": 14352
+        },
+        {
+          "path": "skills/copywriting/references/natural-transitions.md",
+          "sha256": "9bd61b0de5be2c4de4ce130c68236b4f290b12737823827a458bb2b4c8584683",
+          "size": 5561
+        }
+      ]
+    },
+    {
+      "name": "cost-aware-llm-pipeline",
+      "source": "ecc",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/cost-aware-llm-pipeline/.source",
+          "sha256": "0f1638df43ee5758053da7a80416b4d44480bd5c52f58601c2e9c42dabf2c88b",
+          "size": 4
+        },
+        {
+          "path": "skills/cost-aware-llm-pipeline/SKILL.md",
+          "sha256": "2d6c19c2d21a473db8720c4f723f17d265eeec48f84614f0169be2df2fbe28ff",
+          "size": 5992
+        }
+      ]
+    },
+    {
+      "name": "create-prd",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/create-prd/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/create-prd/SKILL.md",
+          "sha256": "e3aa10a437ed7f748a957bd5d1eb06d8fa3f56dc728dcb93ce484387ecc3fa13",
+          "size": 7301
+        }
+      ]
+    },
+    {
+      "name": "cro",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/cro/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/cro/SKILL.md",
+          "sha256": "6e172cc38178c800ff41ceb097f36c6a1db8035fb88a1fee53043f8ec38a6f35",
+          "size": 7114
+        },
+        {
+          "path": "skills/cro/evals/evals.json",
+          "sha256": "62f3003602836e2b49d797ca582e7703629a6b07b131eb77b51b2bb39fe65775",
+          "size": 7656
+        },
+        {
+          "path": "skills/cro/references/experiments.md",
+          "sha256": "bbcc356c0af36cfaa4556bf9e929deac30c65cafb37f909d7c51d4777fe254ca",
+          "size": 7850
+        },
+        {
+          "path": "skills/cro/references/form.md",
+          "sha256": "49b8f29b3da1ae6510572288cad3eb1f3d43a969373443be98b38639746587e6",
+          "size": 10332
+        }
+      ]
+    },
+    {
+      "name": "docker-patterns",
+      "source": "ecc",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/docker-patterns/.source",
+          "sha256": "0f1638df43ee5758053da7a80416b4d44480bd5c52f58601c2e9c42dabf2c88b",
+          "size": 4
+        },
+        {
+          "path": "skills/docker-patterns/SKILL.md",
+          "sha256": "c0cedeb9b64d4468f5af3bb0a97659c654f0ceb916acbec867a29dc682dd633f",
+          "size": 16807
+        }
+      ]
+    },
+    {
+      "name": "documentation-and-adrs",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/documentation-and-adrs/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/documentation-and-adrs/SKILL.md",
+          "sha256": "b60d503925bbaacee7fd63935db70b9ced5b2514ff5a56a672130e01b9690bc5",
+          "size": 10910
+        }
+      ]
+    },
+    {
+      "name": "eval-harness",
+      "source": "ecc",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/eval-harness/.source",
+          "sha256": "0f1638df43ee5758053da7a80416b4d44480bd5c52f58601c2e9c42dabf2c88b",
+          "size": 4
+        },
+        {
+          "path": "skills/eval-harness/SKILL.md",
+          "sha256": "3a5339a5a80099a5c9d55da9b6c8e05a690f5befc6f78d779c75dd79d818ca07",
+          "size": 8738
+        }
+      ]
+    },
+    {
+      "name": "frontend-design",
+      "source": "anthropic-skills",
+      "license": "Apache-2.0",
+      "files": [
+        {
+          "path": "skills/frontend-design/.source",
+          "sha256": "e89cdb85d622d58a3d77e799eeca444d67c7a7298816c262185616cfba9dc280",
+          "size": 17
+        },
+        {
+          "path": "skills/frontend-design/LICENSE.txt",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+          "size": 10174
+        },
+        {
+          "path": "skills/frontend-design/SKILL.md",
+          "sha256": "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3",
+          "size": 9390
+        }
+      ]
+    },
+    {
+      "name": "frontend-ui-engineering",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/frontend-ui-engineering/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/frontend-ui-engineering/SKILL.md",
+          "sha256": "29a3e53d57c0a128831a20730ae874a8c4fda40c001fcdc15f8e9ad4b5f72f1b",
+          "size": 11721
+        }
+      ]
+    },
+    {
+      "name": "idea-refine",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/idea-refine/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/idea-refine/SKILL.md",
+          "sha256": "21ef828e3a2144245b67f840cc3805f761e98c9acce9a96670b7cd7441353463",
+          "size": 9253
+        },
+        {
+          "path": "skills/idea-refine/examples.md",
+          "sha256": "563204bfbf2f80a444151695205af4cb759e722b3d1e5460e08f278a69c89ba1",
+          "size": 20284
+        },
+        {
+          "path": "skills/idea-refine/frameworks.md",
+          "sha256": "161ebc18fdf2d996bc62a87a2d747cf1bf53548354f8925de25c732c27f00309",
+          "size": 5404
+        },
+        {
+          "path": "skills/idea-refine/refinement-criteria.md",
+          "sha256": "1ca2973a4d01b5cb37ab7ddb2eff77fa4e792634a33d0ce44961c068fc88d51a",
+          "size": 5738
+        },
+        {
+          "path": "skills/idea-refine/scripts/idea-refine.sh",
+          "sha256": "f02a52408a4218047c032d221483abfbb48d11f090bb4915965c7419bf2e0e47",
+          "size": 342
+        }
+      ]
+    },
+    {
+      "name": "iterative-retrieval",
+      "source": "ecc",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/iterative-retrieval/.source",
+          "sha256": "0f1638df43ee5758053da7a80416b4d44480bd5c52f58601c2e9c42dabf2c88b",
+          "size": 4
+        },
+        {
+          "path": "skills/iterative-retrieval/SKILL.md",
+          "sha256": "b453b16d3e36174b8487c05ab807d0321a66c2d058812b2ae129d82824183725",
+          "size": 6786
+        }
+      ]
+    },
+    {
+      "name": "kubernetes-patterns",
+      "source": "ecc",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/kubernetes-patterns/.source",
+          "sha256": "0f1638df43ee5758053da7a80416b4d44480bd5c52f58601c2e9c42dabf2c88b",
+          "size": 4
+        },
+        {
+          "path": "skills/kubernetes-patterns/SKILL.md",
+          "sha256": "808b2ec032224e251f1bef9f6e9879e88e2e7abd0feb393632fb6042d8ac5ecc",
+          "size": 20099
+        }
+      ]
+    },
+    {
+      "name": "launch",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/launch/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/launch/SKILL.md",
+          "sha256": "30537ad3f4b0429fcc4053cf6bf04bc0dee316b9e5f7e7ec2e74a9bc44a9ead7",
+          "size": 15727
+        },
+        {
+          "path": "skills/launch/evals/evals.json",
+          "sha256": "f2ceb01d664e24ea253789a9a686997f5cc33a0fc99f57bf215acdada787322c",
+          "size": 10567
+        },
+        {
+          "path": "skills/launch/references/shipped-changes.md",
+          "sha256": "873c79d17d3f428147348a9cc2a5e3d6bb8282cf13fc8a143d539840e8abaa96",
+          "size": 4703
+        },
+        {
+          "path": "skills/launch/references/site-launch-qa.md",
+          "sha256": "aac0447d0d518468e86e971f4e781b61ee05e81dada402e2edcef709cc6418ab",
+          "size": 3793
+        }
+      ]
+    },
+    {
+      "name": "lean-canvas",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/lean-canvas/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/lean-canvas/SKILL.md",
+          "sha256": "5bafe7a33cf57631937fa863ebc6c3d3b0679808a6e5b5fa04b70be615fbc240",
+          "size": 4860
+        }
+      ]
+    },
+    {
+      "name": "llm-evaluation",
+      "source": "wshobson-agents",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/llm-evaluation/.source",
+          "sha256": "9c4f3a77e2c0311c6aebfbc11d7922fb550692d3c8eb6bcaa3776a9529eb0dbd",
+          "size": 16
+        },
+        {
+          "path": "skills/llm-evaluation/SKILL.md",
+          "sha256": "d1c980c9674e3ed5d9c067bc7972c88953f5e3dfd06a5cd09877fb16021e3d39",
+          "size": 3929
+        },
+        {
+          "path": "skills/llm-evaluation/references/details.md",
+          "sha256": "22cef4c0bd3cbceda2719d6f4a8e76c3248cbb3c14ab6c3ce2f025759bb6270b",
+          "size": 14035
+        }
+      ]
+    },
+    {
+      "name": "market-sizing",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/market-sizing/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/market-sizing/SKILL.md",
+          "sha256": "96d1250ba0ab7e5b64c9be8278f63f9661b510237e423b42ef70ab914184faf8",
+          "size": 4424
+        }
+      ]
+    },
+    {
+      "name": "marketing-plan",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/marketing-plan/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/marketing-plan/SKILL.md",
+          "sha256": "2b75dfae852bdb61fd96eebe3d2b373f99f67c86ff830f796310f662ba8906e8",
+          "size": 25489
+        },
+        {
+          "path": "skills/marketing-plan/evals/evals.json",
+          "sha256": "79c3b7680e6ab2f6e4130e7bf13bbfe4011470a7aa44d128344e1505ead4bb57",
+          "size": 12727
+        },
+        {
+          "path": "skills/marketing-plan/references/aarrr-framework.md",
+          "sha256": "5c7bf583c2aa62e193789b6b1a88a978bf3ba9dc0c8c6653b53f7f62c0c1a0e3",
+          "size": 10766
+        },
+        {
+          "path": "skills/marketing-plan/references/budget-planning.md",
+          "sha256": "4351fa1712b66e3e527b71ec9a2e01a68edb43e77b6d310bb424756c6d1a17f7",
+          "size": 10265
+        },
+        {
+          "path": "skills/marketing-plan/references/client-types.md",
+          "sha256": "06e3d0a6f3e9b7195a8c0b43d5186769d1554d1dfd8b1212aca220f9ce09fc01",
+          "size": 11386
+        },
+        {
+          "path": "skills/marketing-plan/references/current-state-rubric.md",
+          "sha256": "8ab1d4a4d16ec01c2bf61d83807c0abd857aadd82f3eeaf4e4842b4bbeff1f03",
+          "size": 11656
+        },
+        {
+          "path": "skills/marketing-plan/references/example-quietude.md",
+          "sha256": "63c002257ee1f6eaeb7c99c4ab9c650ea8bd8f7586c75e4565c2322faef82a04",
+          "size": 69116
+        },
+        {
+          "path": "skills/marketing-plan/references/funding-stage-unlocks.md",
+          "sha256": "49f073653ac32dd42b7e5e10c3deabd7adae8120c41baf0cf813ec20164c6488",
+          "size": 9797
+        },
+        {
+          "path": "skills/marketing-plan/references/growth-patterns.md",
+          "sha256": "fafa84b8c3a62ed9c33c30fc25c7422e0d87b935de990d0acbf91889e1a053de",
+          "size": 13419
+        },
+        {
+          "path": "skills/marketing-plan/references/idea-cross-reference.md",
+          "sha256": "350fa9c6f4cb4cd8f23698adb8479ae94cd6564a06b2b7cfcdf1430448e68d2f",
+          "size": 13418
+        },
+        {
+          "path": "skills/marketing-plan/references/market-sizing.md",
+          "sha256": "e991bf2f38948ea4e829c74fea83f367fbcacb4d6c2ca0f4ca89fc8b9fb2bc0e",
+          "size": 9820
+        },
+        {
+          "path": "skills/marketing-plan/references/measurement-framework.md",
+          "sha256": "93d9bf9d9e624a6031a27ce61cf1617e3aa5a8fff57e1c6f80194f847234b745",
+          "size": 10845
+        },
+        {
+          "path": "skills/marketing-plan/references/methodology.md",
+          "sha256": "a5ae96ee26c800aa40eafcb525139e3dd49b2c1d24005fdcc038287ad25ede7e",
+          "size": 16806
+        },
+        {
+          "path": "skills/marketing-plan/references/ops-stack-mapping.md",
+          "sha256": "9a506816d87ed176c0578d13bbf25c5f8398872d9002b3589e2dfa42ad17c907",
+          "size": 12221
+        },
+        {
+          "path": "skills/marketing-plan/references/plan-template.md",
+          "sha256": "bce84c2c3c31c9163a0849a1371aadb13f6ab8b29402e64b7d5b95c316a79656",
+          "size": 18735
+        },
+        {
+          "path": "skills/marketing-plan/references/team-and-agency-model.md",
+          "sha256": "0c5e55c0992de4d5d24cd299eb46765a8986cb204ebd7c65bce32c868ae0d5f7",
+          "size": 14537
+        }
+      ]
+    },
+    {
+      "name": "monetization-strategy",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/monetization-strategy/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/monetization-strategy/SKILL.md",
+          "sha256": "2306d3c987e9572258fa1327a864049965dda3e4e873093482c6b671d686eea5",
+          "size": 6660
+        }
+      ]
+    },
+    {
+      "name": "north-star-metric",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/north-star-metric/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/north-star-metric/SKILL.md",
+          "sha256": "00242397486a88bb7e91a1d6c99e29fd51bdc9a1cd5def9771988fb40c195fb8",
+          "size": 4152
+        }
+      ]
+    },
+    {
+      "name": "observability-and-instrumentation",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/observability-and-instrumentation/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/observability-and-instrumentation/SKILL.md",
+          "sha256": "e7fcb0820306d46268de9594d676ad98e35040858926c412b7000faa52a61f87",
+          "size": 13948
+        }
+      ]
+    },
+    {
+      "name": "planning-and-task-breakdown",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/planning-and-task-breakdown/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/planning-and-task-breakdown/SKILL.md",
+          "sha256": "ed0f90cc5951ddd4bcab7f871f64efec93a49af9279ef93bc470da77ad8da3f7",
+          "size": 10564
+        }
+      ]
+    },
+    {
+      "name": "pricing",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/pricing/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/pricing/SKILL.md",
+          "sha256": "b0318f64140e60a28d0cf71b1a6bf2aa214b96ef2bc3253c60d16ae480367d25",
+          "size": 13479
+        },
+        {
+          "path": "skills/pricing/evals/evals.json",
+          "sha256": "ea2ec5a51826311225c806c9ff3f7fc8c4716b154f7b91aba67ab8639bdb8984",
+          "size": 11295
+        },
+        {
+          "path": "skills/pricing/references/pricing-models.md",
+          "sha256": "2cdb900b74f56a796c0331725e73eff4ecd84f8021b42efbb0a5b4903d1d9b16",
+          "size": 4681
+        },
+        {
+          "path": "skills/pricing/references/pricing-page-teardown.md",
+          "sha256": "b58a3bffa58ae7c3a475aba33887daaa98e0dc0de57ea948314256b08aa306ad",
+          "size": 7283
+        },
+        {
+          "path": "skills/pricing/references/research-methods.md",
+          "sha256": "90337058da40c2fcf858bfee9ee8905ad1dc3a5f90d1878f9a8e9ab79193631b",
+          "size": 6677
+        },
+        {
+          "path": "skills/pricing/references/tier-structure.md",
+          "sha256": "b59910d37cceb74484f28b065963daa60f5c4fb1ffc36a0584d0f3cad11f3e30",
+          "size": 7199
+        }
+      ]
+    },
+    {
+      "name": "pricing-strategy",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/pricing-strategy/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/pricing-strategy/SKILL.md",
+          "sha256": "09321c5984f3654077bd58921ec4b7235f47e00caf44445bd2e5a5ed13bcb895",
+          "size": 3666
+        }
+      ]
+    },
+    {
+      "name": "prioritization-frameworks",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/prioritization-frameworks/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/prioritization-frameworks/SKILL.md",
+          "sha256": "5dab45be9e46397ec1c35a6a6aaa85233843184fd1e9d8e5f279dd02d6e4fc21",
+          "size": 4235
+        }
+      ]
+    },
+    {
+      "name": "prioritize-features",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/prioritize-features/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/prioritize-features/SKILL.md",
+          "sha256": "d05c001ea9d71ccf6aca975e0530a2a85545192b1eec9e06cc6d1339156c0f87",
+          "size": 2497
+        }
+      ]
+    },
+    {
+      "name": "prompt-engineering-patterns",
+      "source": "wshobson-agents",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/prompt-engineering-patterns/.source",
+          "sha256": "9c4f3a77e2c0311c6aebfbc11d7922fb550692d3c8eb6bcaa3776a9529eb0dbd",
+          "size": 16
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/SKILL.md",
+          "sha256": "6a210b15be01bc6f76a74ec1e46302dee310ddf79d2def63fc9b7c54221fe329",
+          "size": 5216
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/assets/few-shot-examples.json",
+          "sha256": "8e1ade9727b0bb1fb5540a781192b67e2692fbb5908ffe9eac3ec7cc2fbc6216",
+          "size": 4174
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/assets/prompt-template-library.md",
+          "sha256": "c5756b6f9c5558d8ca82d845fd50492b53f1f4d6d02cf27585f411440a4723c2",
+          "size": 3291
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/references/chain-of-thought.md",
+          "sha256": "155af3b1d240b67970870940cc90396ba9e66580a9487bb0f7bd288ad10622f5",
+          "size": 9401
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/references/details.md",
+          "sha256": "406934586a34cd1aa0084d3dbd21e5e77be75de934a791cae962e1e16f55a133",
+          "size": 9195
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/references/few-shot-learning.md",
+          "sha256": "d8784634f7beb4c60c51add45203ef2d9d0e4e3accbb81ba3295f87d893dba10",
+          "size": 11188
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/references/prompt-optimization.md",
+          "sha256": "5c25ad9b49045ef35c55b531bd227f04628b0018080b0d4f05cb20b01b44ee41",
+          "size": 12792
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/references/prompt-templates.md",
+          "sha256": "18db56a32be1639072631f0f7256b153acd678fe6092edad23b2a4a44016e3da",
+          "size": 11409
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/references/system-prompts.md",
+          "sha256": "88aa10639dad981b07f3bba05539c4eefcc5fba5ed255c60eab0df238778e000",
+          "size": 5444
+        },
+        {
+          "path": "skills/prompt-engineering-patterns/scripts/optimize-prompt.py",
+          "sha256": "374323ec15ca40b5e2a43f580664913a61e998adb30f4087e9cc66710cfdf9da",
+          "size": 9508
+        }
+      ]
+    },
+    {
+      "name": "rag-implementation",
+      "source": "wshobson-agents",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/rag-implementation/.source",
+          "sha256": "9c4f3a77e2c0311c6aebfbc11d7922fb550692d3c8eb6bcaa3776a9529eb0dbd",
+          "size": 16
+        },
+        {
+          "path": "skills/rag-implementation/SKILL.md",
+          "sha256": "0dc4aeb9a999127821fd938f07ddc3ca873324b1124f66c5d7ccb50f61a66ef0",
+          "size": 4555
+        },
+        {
+          "path": "skills/rag-implementation/references/details.md",
+          "sha256": "d117db50282eb6e9c1e1d2672316db1518885054c6489e46dd2a5d7b7bf4955c",
+          "size": 11063
+        }
+      ]
+    },
+    {
+      "name": "requesting-code-review",
+      "source": "superpowers",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/requesting-code-review/.source",
+          "sha256": "7fe7e55a38dc9ef273e4de759aa49a013924d12c8cd03a596f9571dc0b748dc5",
+          "size": 12
+        },
+        {
+          "path": "skills/requesting-code-review/SKILL.md",
+          "sha256": "cfcee1b06774e7c0517f1e09be1a11f2d5680257072723e709ddbcf7e08b795a",
+          "size": 2977
+        },
+        {
+          "path": "skills/requesting-code-review/code-reviewer.md",
+          "sha256": "82e370be6b3447523816286195571e4216ba56ba1ad6ad0e87862294c4c78dcb",
+          "size": 6449
+        }
+      ]
+    },
+    {
+      "name": "security-and-hardening",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/security-and-hardening/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/security-and-hardening/SKILL.md",
+          "sha256": "2e3fc60eed5aba97fe416f3f3c9317fdb014a682925ec70a733c3ff99e4b9858",
+          "size": 17559
+        },
+        {
+          "path": "skills/security-and-hardening/references/hardening-patterns.md",
+          "sha256": "2e1b93a502b4cdb0258404441f3aab029b0cce4003fbbcc61af9a2de18bab9ab",
+          "size": 13036
+        }
+      ]
+    },
+    {
+      "name": "seo-audit",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/seo-audit/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/seo-audit/SKILL.md",
+          "sha256": "bd5f6fca1334fc960d54403f7142e6d9da066eac7eb2b1ae194b7304bcf76d67",
+          "size": 18111
+        },
+        {
+          "path": "skills/seo-audit/evals/evals.json",
+          "sha256": "1524e98916ab53abb894fb80827a8d0e1815041adca2ee2023b89916d68f22b2",
+          "size": 15717
+        },
+        {
+          "path": "skills/seo-audit/references/ai-writing-detection.md",
+          "sha256": "f1e273f56ce7e2215ff218bf903680ddcec0fd026ab90c3ebfb3439ed0edfaa4",
+          "size": 6528
+        },
+        {
+          "path": "skills/seo-audit/references/international-seo.md",
+          "sha256": "0603022cca968acf7889fc224221aa0e70955ba64355bc18b06f7e86b32f45e5",
+          "size": 14898
+        },
+        {
+          "path": "skills/seo-audit/references/local-seo-pages-and-measurement.md",
+          "sha256": "20607ef91c4b8b37346f42130a6f51ed4ce64dc2731b6e1328b5b14f16917fe3",
+          "size": 4036
+        },
+        {
+          "path": "skills/seo-audit/references/local-seo-profile-and-citations.md",
+          "sha256": "83b1b63eb6083e7aab1f56c4928335ea2a235e837861a9e9e8043b6af162a1f3",
+          "size": 3971
+        },
+        {
+          "path": "skills/seo-audit/references/local-seo.md",
+          "sha256": "d2666d9c225bc36f9737ce612894abbe7e263b5974e2db7c1efc50f6010bb376",
+          "size": 7249
+        },
+        {
+          "path": "skills/seo-audit/references/rankings-push.md",
+          "sha256": "2a51fa3569e00c10353526bfa98ca1faccccf9c37be78f5f229c72116f5d2154",
+          "size": 4466
+        },
+        {
+          "path": "skills/seo-audit/references/title-tags.md",
+          "sha256": "c40b3c6af3600ca15670db8eb81000c7ca6fa25265a6550ccc630f53db3fcf51",
+          "size": 5533
+        }
+      ]
+    },
+    {
+      "name": "shipping-and-launch",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/shipping-and-launch/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/shipping-and-launch/SKILL.md",
+          "sha256": "726f3e546369db289160b8d42195590f00b6432887e17bf19070dcc9a347fe39",
+          "size": 11515
+        }
+      ]
+    },
+    {
+      "name": "social",
+      "source": "marketingskills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/social/.source",
+          "sha256": "a9cb8ca4c26b77e5aae1ca36c8863c2a9d29e1e6574020eb619534006ec0f6ba",
+          "size": 16
+        },
+        {
+          "path": "skills/social/SKILL.md",
+          "sha256": "dd4c01d0925f571562d4e8dea4af6b60bd9d491149187d94927e65280fad1bee",
+          "size": 18313
+        },
+        {
+          "path": "skills/social/evals/evals.json",
+          "sha256": "1d2592a0cfc6378ba8742ce6e19f5974663b1d8018c4f136e5f529373bf17198",
+          "size": 11871
+        },
+        {
+          "path": "skills/social/references/carousel-frameworks.md",
+          "sha256": "e703aa530ec9f68cdf5b58e8e0d4d1a5cc3f22b9e2d3e3222f16a9763d423247",
+          "size": 11124
+        },
+        {
+          "path": "skills/social/references/listening-sources-template.md",
+          "sha256": "c68bc6f57b0a48c432b1ce72c9324d41a04d0e7784d0bab91afb4a6065a43e38",
+          "size": 3479
+        },
+        {
+          "path": "skills/social/references/listening.md",
+          "sha256": "52cf68aaaa57a69b69b3587ffd9b848a6f1ca7e0d51378f566339ad7f2b730e0",
+          "size": 13474
+        },
+        {
+          "path": "skills/social/references/platform-limits.md",
+          "sha256": "6ecc6b40ff82b95c48906341f7d3c58337671d4d94f624c858764f1ed5a77c3c",
+          "size": 2830
+        },
+        {
+          "path": "skills/social/references/platforms.md",
+          "sha256": "a070eda1f54bdba103a9c89613d83331fc5c53c9e8a48543e0198f1a2995cb0c",
+          "size": 8313
+        },
+        {
+          "path": "skills/social/references/post-templates.md",
+          "sha256": "9cca4680c95801daedfd8acadf9089d0083784c2567784888807569896f71d9b",
+          "size": 4016
+        },
+        {
+          "path": "skills/social/references/reverse-engineering.md",
+          "sha256": "c27bef59d463b3b11331c1770f4a23e9e6bbce7d7c8db1e7f7f4f14ba206243f",
+          "size": 5551
+        },
+        {
+          "path": "skills/social/references/short-form-video.md",
+          "sha256": "ed0976bd7ac1f85b7b8c162087e346118f2cf0ef46b3ccafc6a7a329118987d1",
+          "size": 7040
+        },
+        {
+          "path": "skills/social/references/x-algorithm.md",
+          "sha256": "943b2c5a819aad53ebf62a1652adc47956d6fdf738e18cd98eeb609819a66180",
+          "size": 7113
+        }
+      ]
+    },
+    {
+      "name": "spec-driven-development",
+      "source": "agent-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/spec-driven-development/.source",
+          "sha256": "27e4067316dcfcf6295253b1a21e7ccba47e257f294589981dec6b28c38ee0d3",
+          "size": 13
+        },
+        {
+          "path": "skills/spec-driven-development/SKILL.md",
+          "sha256": "c4b97ce3d7f24be0e67fd612c7595f65504872e3a9f8d338d098b2363fdb66ef",
+          "size": 13096
+        }
+      ]
+    },
+    {
+      "name": "sprint-plan",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/sprint-plan/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/sprint-plan/SKILL.md",
+          "sha256": "54ac27165fd7d57fe3f598f1ef66087d03fbf56d9f583adf7608ccaca9ce3382",
+          "size": 2365
+        }
+      ]
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "source": "ui-ux-pro-max",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/ui-ux-pro-max/.source",
+          "sha256": "baa7cd542fee98cd44625550ba7740eb2d472447c34bab0f6ea49197fbc84703",
+          "size": 14
+        },
+        {
+          "path": "skills/ui-ux-pro-max/SKILL.md",
+          "sha256": "ea087c341bfb5b23195c7302027268ede86da802554c18a5c4896a6017b439f9",
+          "size": 15969
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/app-interface.csv",
+          "sha256": "331e7cf2c0b222d80c566c5f255c63cb339f65bfd02e471a720f28e4864a9f08",
+          "size": 11046
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/catalog-summary.json",
+          "sha256": "6638da97231c07fb5cef3cd9d3ce483ca7b2f9748980f8c27490eb03968d8894",
+          "size": 2392
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/charts.csv",
+          "sha256": "4115cf1120680f2cedef0676cb648f30c7ef4699e2a947535d4113e71ed3b12a",
+          "size": 23365
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/colors.csv",
+          "sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c",
+          "size": 37940
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/data-provenance.json",
+          "sha256": "e82fb33ed49375a300e93d9c11ccd1c1493c999e84ee7ee295e527634786e2e0",
+          "size": 36686
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/google-font-licenses.json",
+          "sha256": "35688523f2955795caa1a47c53b83099e60c1708461476f9cc3a050cf3b0148a",
+          "size": 433127
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/google-fonts.csv",
+          "sha256": "1c8c3b2ea1faf6a1012da463756def8b3889db33f2226f0343bb4daa80307d03",
+          "size": 747241
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/icons.csv",
+          "sha256": "50816c6012030178195a16ee481ebf58b47bd985d70e8ec58886cc83f6eddafc",
+          "size": 57945
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/landing.csv",
+          "sha256": "9a2edd3bb676c2a58f00ade7a062e285222d4297bfd847c8d5b056f0dbbf52d0",
+          "size": 25449
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/motion.csv",
+          "sha256": "381affe8df8ea1f66fbbda2598827f9f54299107bbe6a1b4e9b68f6b62091ceb",
+          "size": 14679
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/phosphor-icons-upstream.json",
+          "sha256": "2399325233b277b5c97a80e6a5e8941154f5d057beee4e7613db87c87d700236",
+          "size": 823933
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/products.csv",
+          "sha256": "42473f75e8dde5987bdf89ce55d8c168091b80a356cae691dd60247d80720b70",
+          "size": 75623
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/react-performance.csv",
+          "sha256": "3d925802539abac5afeb63ae8aa1960b7229ad271b3a47caed40ab2d97ad0734",
+          "size": 15080
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/angular.csv",
+          "sha256": "704be83f2bad30c7e6de01afb113ffa01e0c458762f48b7102f31ba2367b5553",
+          "size": 19863
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/astro.csv",
+          "sha256": "2c2f55fadaafc05e04cc321c8194a1a28b656e6757fe2ba316f41b16428299c6",
+          "size": 14591
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/avalonia.csv",
+          "sha256": "442fca14675a020683473e7e49f08abb27b9df0765c80efe54aef61f1a4ac258",
+          "size": 27327
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/flutter.csv",
+          "sha256": "64dba0ac17349f28bce517a0f5f48c54d9ed2e487ec0c0258303463b382f41a0",
+          "size": 14192
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/html-tailwind.csv",
+          "sha256": "d05a581d20af57b8ca0104a6d31d90a07c437d500662a96c3029fc2f9a4678ee",
+          "size": 16551
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/javafx.csv",
+          "sha256": "2e819b8d5abdd23ad4dae0991650fdb57af497aabd68b37463aa9c442944c869",
+          "size": 33577
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/jetpack-compose.csv",
+          "sha256": "699de218b286948eaec7d15767b6e1350ee299167e49bf476d82e3ff58724e0a",
+          "size": 12295
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/laravel.csv",
+          "sha256": "854ea4daa5fc61292d22235ad33b49ba3fe22423c3de8d3cb03758ffed3b59f9",
+          "size": 20163
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/nextjs.csv",
+          "sha256": "ecd2c27b2ea0127d203ae726060efcdd7335b5e83f96b99e4f3befbbfeebd5a4",
+          "size": 18687
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/nuxt-ui.csv",
+          "sha256": "fce682a338cfcdbf35d318d20e5befbe7b5d81b05abc37f87677a6d9cde84dc6",
+          "size": 28700
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/nuxtjs.csv",
+          "sha256": "3d9b54ed2d151bd9c86e9e5609b8a6f88a00c4c52fa601a30af96c49b2c4d176",
+          "size": 23014
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/react-native.csv",
+          "sha256": "ba31dd9c0c04da6bc02a74448bf121f9c0728ae5ba3b4d47b487778b0a1135b5",
+          "size": 14049
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/react.csv",
+          "sha256": "4dd176a9787e5c6306b5df94158d75955adcdc6edab41ce5286641a5842303c1",
+          "size": 21166
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/shadcn.csv",
+          "sha256": "e56cfde5b74907836ac3582a4779d5b7f3d206a702ab81b8669a1b668c3eeb51",
+          "size": 23184
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/svelte.csv",
+          "sha256": "f6e379ba802941ba26b01d4ffbe3cd39120f2587659a1d93851c707f66bc13db",
+          "size": 15078
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/swiftui.csv",
+          "sha256": "bdd9231ff3ad658f4e7c063e1eb49df2fd09ac8d90631a86df899b39833b9623",
+          "size": 15323
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/threejs.csv",
+          "sha256": "155d583b9c64da0df4b6c6cb060c02eab222505e0734d6353da02c9e2b5d982b",
+          "size": 46769
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/uno.csv",
+          "sha256": "a0474363e4225b5367214d5675fd3e075f137026f9500f0d04357882ef4f6d48",
+          "size": 30091
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/uwp.csv",
+          "sha256": "c409f08c1fbba1f1029f1acaa554e7b4471cc85517a5751c9f2e62465badcd5c",
+          "size": 24692
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/vue.csv",
+          "sha256": "b655f1ebb9dff2652d15981f31b1784c8a6d4759efd2815a14f3088257569f95",
+          "size": 12813
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/winui.csv",
+          "sha256": "e676dc1c13ee6c205c40b0746f1335150a346c7a49a0616d2545bc3d2c930c85",
+          "size": 27890
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/stacks/wpf.csv",
+          "sha256": "9781a9950b20333637b30a02e498b7efca21b618a3eeb8665836f3ac6e974da7",
+          "size": 24158
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/styles.csv",
+          "sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7",
+          "size": 149478
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/typography.csv",
+          "sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8",
+          "size": 49997
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/ui-reasoning.csv",
+          "sha256": "f0774dd741cecdad5eec842034bd6d5e9ea50e9f220a1910069748daa0bb8e9a",
+          "size": 77360
+        },
+        {
+          "path": "skills/ui-ux-pro-max/data/ux-guidelines.csv",
+          "sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5",
+          "size": 27516
+        },
+        {
+          "path": "skills/ui-ux-pro-max/references/pro-rules.md",
+          "sha256": "d28442d61c310b49c054a4ea736f89fb3008beebdbbc38c4b3a540b8f7fadf23",
+          "size": 10909
+        },
+        {
+          "path": "skills/ui-ux-pro-max/references/quick-reference.md",
+          "sha256": "0609bc7c89dacb40472465d8fc14257b56b2c43439660fc8d6fa3b8c022e1876",
+          "size": 24526
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/core.py",
+          "sha256": "c3be4b23e7150e6b45095213158cfa3c8ad96502f01dde3f6ffff9de64a4f481",
+          "size": 41236
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/design_system.py",
+          "sha256": "e7d1c94c4b2eada17c5551157668362659ccf9626d34dbd58e68142410f90103",
+          "size": 71537
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/reasoning_contract.py",
+          "sha256": "b8bac1af82aa280d3e06f00aabaeac4337e632996b07fed874e2b6ee6e9c5913",
+          "size": 5824
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/search.py",
+          "sha256": "d54e648fe0ec2932cac66684220cc17be4bd4b4eba1d23d3195d509d398db374",
+          "size": 9373
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/google-api.json",
+          "sha256": "22d8dc81a7d6827b7e8b64b53e7d184210fb9759e8e294e0d5133c81cc460176",
+          "size": 1079
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/google-catalog.json",
+          "sha256": "c608ad5c4084ebc50a4bbbfb69ea2456c01fd5519c457e18410fffd250ae948f",
+          "size": 1772
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/google-existing.csv",
+          "sha256": "4e0761b839dc6b2187a370e82eddc0aed8a7ff10c09e28dd814bb3656dac595b",
+          "size": 480
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/google-metadata.json",
+          "sha256": "30bffc29ae348416a2de2f9c6c418e768e4578f136b0f4bac5d2f70124f2e9ba",
+          "size": 328
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/google-overrides.json",
+          "sha256": "6243a48a4619986768c4628e2d0c98ff195beba71ba9be5df8f0c52fc6d90c0b",
+          "size": 97
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/icons-curated.csv",
+          "sha256": "68362c9a700c13b96f000784a0198c1c7e117a7088a01c85744e44233038fe9d",
+          "size": 495
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/phosphor-core.json",
+          "sha256": "ae4d0bb076240824e1b643c2270d1f8cc0952a69502ec1e622b7dedd85b930bb",
+          "size": 571
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/phosphor-package.json",
+          "sha256": "500588c757d6de03e3d7e69b27a8b8b1f88ccf6bb0333e4c1e9b0d6a4f112475",
+          "size": 370
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/phosphor-react-exports.json",
+          "sha256": "d79f2ee0afdbc2f87776733e145df3538a16a25d7c2fba0056bb48295dad0ded",
+          "size": 87
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/catalogs/phosphor-react-package.json",
+          "sha256": "1c57a1d76bcc0cdd3632d4c18b9c0e79576b4591df39831c9607e5d0eb4f2cec",
+          "size": 81
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/relevance-baseline.json",
+          "sha256": "0df200fc54c1cb97a52d6775e7f501509163cea8f8b73fd7268429bc1f835afe",
+          "size": 89426
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/relevance-cases.json",
+          "sha256": "e77d36eebbf6ddc2860946a02cdb659351da6c09f2688f1ed30939a418099646",
+          "size": 36734
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/fixtures/relevance-thresholds.json",
+          "sha256": "1fbe8623fe3e49c8d828139bca9df69043746e488e8bf09d93dfb9cbc31f5cef",
+          "size": 5079
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_catalog_refresh.py",
+          "sha256": "3e2ca5d12702318f641ae62d0c14f22a3bcc84d84e79b863c0e947d475604adb",
+          "size": 19466
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_catalog_summary_line_endings.py",
+          "sha256": "fa6ff09f0ec2c99013588c77397f5082dddebe8f467e94c5f8378ec9595f4989",
+          "size": 2947
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_core.py",
+          "sha256": "3527fe2f4b852f69f07c17ddc0d615d9a6e025c924e45a33985579a94a8d2118",
+          "size": 16680
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_core_data_quality.py",
+          "sha256": "3ffc6b4905c9ea26d7ac4527ab154d153584231aee71b2ae4bd017977fa09cc5",
+          "size": 8954
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_data_contracts.py",
+          "sha256": "0360d6e10080c0bca214f2b0bbad582ba50702a542ce21013351aca54938df3a",
+          "size": 19513
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_design_system_mode.py",
+          "sha256": "95ad2c154349f7021f55a558f8dcdd71df1a24fcf531a4364a8e49526a0865ef",
+          "size": 9815
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_design_system_stack.py",
+          "sha256": "83d09ffe8cfbf7b265f362129f061dfe8e5e167ce5db43adaead197cabc9ca38",
+          "size": 2261
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_native_desktop_stack_freshness.py",
+          "sha256": "3942845712b9a829323cd3568511483135f2a8c7cd79ccf61679da4b0f624dbb",
+          "size": 8375
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_relevance_evaluator.py",
+          "sha256": "2fe56a4d6fe5fff15ff592274b0eeaba925146cefea6c0fa29d8f1b77c9aca1f",
+          "size": 8430
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_skill_script_paths.py",
+          "sha256": "7cec24b94be771bc60bc84f8993e614bb16d4047930e1dd3d3bed91628311d44",
+          "size": 4305
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_style_taxonomy.py",
+          "sha256": "cd14d0092e8a454d213aa104b53e4e70ba698491fa00fde9fdec5ca8a3d70011",
+          "size": 7425
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_text_layout_resilience.py",
+          "sha256": "b51d32ee8a15505b87cb81957fb2d1b385e041e8beb4463c311d236bfd29ebd4",
+          "size": 5874
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/tests/test_web_stack_freshness.py",
+          "sha256": "74897571398585f27e2c35d09d81b0a531c8c774f4a2967e5e1b1d1b05a483d9",
+          "size": 7701
+        },
+        {
+          "path": "skills/ui-ux-pro-max/scripts/validate_data.py",
+          "sha256": "a599aa256049cf30954d1f164721b99e453eb7e4cb8241bcab2d5573e6cf58b8",
+          "size": 52230
+        }
+      ]
+    },
+    {
+      "name": "user-stories",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/user-stories/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/user-stories/SKILL.md",
+          "sha256": "8ce89cd81de5a3df7d504380d18c54cec6c59ccdb7fd18cbcb62b6b6183d0a55",
+          "size": 2991
+        }
+      ]
+    },
+    {
+      "name": "value-proposition",
+      "source": "pm-skills",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "skills/value-proposition/.source",
+          "sha256": "4cd46e51384d723c97eb5af8d0d6d1e5e1495f83e5981a71c2285a4fd19130b6",
+          "size": 10
+        },
+        {
+          "path": "skills/value-proposition/SKILL.md",
+          "sha256": "b07cc0399582fc178be31b513b313d2420c7941dd568b52a0bf6cfb0ab6c4ec7",
+          "size": 5836
+        }
+      ]
+    }
+  ]
+}
