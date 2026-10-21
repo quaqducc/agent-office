@@ -1,25 +1,17 @@
-// Office view: scaled pixel scene, desks with characters and status, live links and interaction effects.
+// Office view: scaled pixel scene, desks with characters and status, employee walking animations and interaction speech bubbles.
 import { sprite } from "./sprites.js";
-import { deskLayout, ENTRANCE, SCENE } from "./layout.js";
+import { deskLayout, ENTRANCE, SCENE, findWalkPath } from "./layout.js";
 import { sceneSvg } from "./scene.js";
 import { activeLinks } from "./derive.js";
 import { esc, plain } from "./util.js";
-
-const PIX = (w, h, rects) => `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
-const ICONS = {
-  envelope: PIX(10, 8, '<rect y="0" width="10" height="8" fill="#fffaf0"/><rect width="10" height="1" fill="#b98a2e"/><rect y="7" width="10" height="1" fill="#b98a2e"/><rect width="1" height="8" fill="#b98a2e"/><rect x="9" width="1" height="8" fill="#b98a2e"/><rect x="1" y="1" width="2" height="1" fill="#b98a2e"/><rect x="7" y="1" width="2" height="1" fill="#b98a2e"/><rect x="3" y="2" width="1" height="1" fill="#b98a2e"/><rect x="6" y="2" width="1" height="1" fill="#b98a2e"/><rect x="4" y="3" width="2" height="1" fill="#b98a2e"/><rect x="4" y="4" width="2" height="2" fill="#e03e3e"/>'),
-  flag: PIX(8, 8, '<rect x="1" width="1" height="8" fill="#5b3a1e"/><rect x="2" width="5" height="1" fill="#12a37a"/><rect x="2" y="1" width="6" height="2" fill="#12a37a"/><rect x="2" y="3" width="4" height="1" fill="#12a37a"/>'),
-  alert: PIX(8, 8, '<rect x="1" width="6" height="8" fill="#e03e3e"/><rect x="3" y="1" width="2" height="4" fill="#fff"/><rect x="3" y="6" width="2" height="1" fill="#fff"/>'),
-  reply: PIX(9, 8, '<rect width="9" height="6" fill="#4453d6"/><rect x="1" y="6" width="2" height="2" fill="#4453d6"/><rect x="1" y="1" width="7" height="1" fill="#fff"/><rect x="1" y="3" width="5" height="1" fill="#fff"/>'),
-};
 
 /** Desk name plates stay short: "Senior Developer" → "Developer", "DevOps / SRE" → "DevOps". */
 const SHORT = { "business-strategist": "Strategist", "product-manager": "Product", "ai-engineer": "AI Engineer", "ui-ux": "UI/UX", architect: "Architect", developer: "Developer", marketing: "Marketing" };
 export const shortName = (role, name) => SHORT[role] ?? String(name ?? role).split(" / ")[0];
 
 const STATUS_VI = { working: "đang làm", waiting: "đang chờ", approval: "chờ bạn duyệt", idle: "rảnh" };
-const head = (s, n) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n) + "…" : t; };
-const tail = (s, n) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? "…" + t.slice(-n) : t; };
+const head = (s, n) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, Math.max(0, n - 1)) + "…" : t; };
+const tail = (s, n) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? "…" + t.slice(-(n - 1)) : t; };
 
 const DESK = `<svg class="desk-art" viewBox="0 0 132 64" shape-rendering="crispEdges" aria-hidden="true">
   <rect x="2" y="60" width="128" height="4" class="d-shadow"/>
@@ -38,6 +30,101 @@ const BADGE = {
   approval: "<b>!</b>",
 };
 
+/** Calculate replay walk duration and accessibility options. */
+export function walkDuration(speed = 1, prefersReducedMotion = false) {
+  if (prefersReducedMotion || speed === 0 || speed === Infinity) {
+    return { isInstant: true, legDuration: 0, talkDuration: 0 };
+  }
+  const s = Math.max(0.1, Number(speed) || 1);
+  return {
+    isInstant: false,
+    legDuration: Math.round(1200 / s),
+    talkDuration: Math.round(1000 / s),
+  };
+}
+
+/** Single Presence and concurrency management for walking characters. */
+export class RoleWalkQueue {
+  constructor({ maxConcurrent = 3 } = {}) {
+    this.maxConcurrent = maxConcurrent;
+    this.active = new Set();
+    this.queues = new Map();
+  }
+
+  isRoleBusy(role) {
+    return this.active.has(role);
+  }
+
+  enqueue(role, task) {
+    if (this.active.has(role)) {
+      if (!this.queues.has(role)) this.queues.set(role, []);
+      this.queues.get(role).push(task);
+      return "queued";
+    }
+    if (this.active.size >= this.maxConcurrent) {
+      return "overflow";
+    }
+    this.active.add(role);
+    return "running";
+  }
+
+  finish(role) {
+    this.active.delete(role);
+    const q = this.queues.get(role);
+    if (q && q.length > 0) {
+      const next = q.shift();
+      this.active.add(role);
+      return next;
+    }
+    return null;
+  }
+
+  clear() {
+    this.active.clear();
+    this.queues.clear();
+  }
+}
+
+export const globalWalkQueue = new RoleWalkQueue({ maxConcurrent: 3 });
+const activeAnimControllers = new Set();
+
+/** Format speech bubble text and styling from interaction effect. */
+export function getBubbleContent(fx) {
+  let text = String(fx.label ?? "").trim();
+  let cls = "";
+  if (fx.kind === "approval") {
+    cls = "need";
+    text = text ? head(text, 60) : "Cần duyệt hành động";
+  } else if (fx.kind === "checkpoint") {
+    cls = "wait";
+    text = text ? head(text, 60) : "Báo cáo tiến độ";
+  } else if (fx.kind === "reply") {
+    text = head(text, 60);
+  } else if (fx.kind === "done") {
+    text = text.startsWith("Xong") ? head(text, 60) : `Xong: ${head(text, 54)}`;
+  } else if (fx.kind === "failed") {
+    cls = "need";
+    text = text.startsWith("Lỗi") ? head(text, 60) : `Lỗi: ${head(text, 54)}`;
+  } else {
+    text = head(text, 60);
+  }
+  return { text, cls };
+}
+
+/** Cancel all walking animations and return everyone to their desk immediately. */
+export function cancelAllWalks(el) {
+  for (const ctrl of activeAnimControllers) {
+    try { ctrl.abort(); } catch (_) {}
+  }
+  activeAnimControllers.clear();
+  globalWalkQueue.clear();
+
+  if (el) {
+    el.querySelectorAll(".actor").forEach(a => a.remove());
+    el.querySelectorAll(".desk.away").forEach(d => d.classList.remove("away"));
+  }
+}
+
 /**
  * Build (once per role set) and update the office.
  * @param {HTMLElement} el the .office element
@@ -47,6 +134,8 @@ const BADGE = {
 export function renderOffice(el, state, opts) {
   const roles = Object.keys(state.roles);
   const rooms = opts.rooms;
+  el._rooms = rooms;
+  el._names = opts.names;
   const key = `${roles.join(",")}:${JSON.stringify(rooms ?? [])}`;
   if (el.dataset.roles !== key) build(el, roles, opts);
   const links = state.runStatus === "active" ? activeLinks(state) : [];
@@ -77,17 +166,17 @@ export function renderOffice(el, state, opts) {
     const dx = parseFloat(b.style.left) - parseFloat(a.style.left);
     if (a.style.top === b.style.top && dx > 0 && dx < 230) { a.classList.add("lean-l"); b.classList.add("lean-r"); }
   }
-  el.querySelector(".user-spot").classList.toggle("in-chain", chain.has("user"));
-  drawLinks(el, links);
+  el.querySelector(".user-spot")?.classList.toggle("in-chain", chain.has("user"));
 }
 
 function build(el, roles, opts) {
   const rooms = opts.rooms;
+  el._rooms = rooms;
+  el._names = opts.names;
   el.dataset.roles = `${roles.join(",")}:${JSON.stringify(rooms ?? [])}`;
   const desks = deskLayout(roles, rooms);
   el.innerHTML = `<div class="scene" style="width:${SCENE.w}px;height:${SCENE.h}px">
     ${sceneSvg({ zones: new Set(desks.map(d => d.zone)), rooms })}
-    <svg class="links" viewBox="0 0 ${SCENE.w} ${SCENE.h}" aria-hidden="true"><g class="trails"></g><g class="live"></g></svg>
     <div class="user-spot" style="left:${ENTRANCE.x}px;top:${ENTRANCE.y}px"><div class="halo"></div><div class="char">${sprite("user")}</div><div class="plate">Bạn</div></div>
     ${desks.map(d => `<button class="desk" type="button" data-role="${esc(d.role)}" data-status="idle" style="left:${d.px}px;top:${d.py}px">
         <span class="halo"></span><span class="chair"></span>
@@ -102,84 +191,223 @@ function build(el, roles, opts) {
   fit(el);
 }
 
-/** Scene-pixel anchor of a role (its chest) or of the user at the door. */
-function point(el, who) {
-  const node = who === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(who)}"]`);
-  if (!node) return { x: ENTRANCE.x, y: ENTRANCE.y };
-  return { x: parseFloat(node.style.left), y: parseFloat(node.style.top) - 36 };
-}
-
-/** Curved path between two points, bowing upward-left so A→B and B→A don't overlap. */
-function curve(a, b) {
-  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
-  const bend = Math.min(90, len * 0.22);
-  return `M${a.x.toFixed(1)} ${a.y.toFixed(1)} Q${(mx + (dy / len) * bend).toFixed(1)} ${(my - (dx / len) * bend).toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
-}
-
-function drawLinks(el, links) {
-  const g = el.querySelector(".links .live");
-  const sig = links.map(l => `${l.id}:${l.from}:${l.to}:${l.kind}:${l.status}`).join("|");
-  if (g.dataset.sig === sig) return;
-  g.dataset.sig = sig;
-  g.innerHTML = links.filter(l => l.from !== l.to).map(l => {
-    const a = point(el, l.from), b = point(el, l.to);
-    const cls = l.kind === "approval" ? "approval" : l.status === "queued" ? "queued" : "task";
-    return `<path class="link ${cls}" d="${curve(a, b)}"/><circle class="link-end ${cls}" cx="${b.x}" cy="${b.y}" r="7"/>`;
-  }).join("");
-}
-
 /** Scale the scene to fit its stage: by width and height on desktop, by width only when stacked. */
 export function fit(el) {
   const stage = el.parentElement;
   if (!stage) return;
-  const stacked = matchMedia("(max-width: 1000px)").matches;
+  const stacked = typeof matchMedia === "function" ? matchMedia("(max-width: 1000px)").matches : false;
   const k = Math.max(0.2, stacked ? stage.clientWidth / SCENE.w : Math.min(stage.clientWidth / SCENE.w, stage.clientHeight / SCENE.h));
   el.style.setProperty("--k", String(k));
   el.style.width = `${SCENE.w * k}px`;
   el.style.height = `${SCENE.h * k}px`;
 }
 
+/** Animate an actor moving through a sequence of waypoints. */
+async function animatePath(actor, points, totalLegDuration, signal) {
+  if (points.length < 2) return;
+  let totalDist = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    totalDist += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  if (totalDist <= 0) return;
+
+  actor.classList.add("walking");
+
+  for (let i = 0; i < points.length - 1; i++) {
+    if (signal.aborted) return;
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const segDur = Math.max(10, Math.round(totalLegDuration * (dist / totalDist)));
+
+    const dx = p2.x - p1.x;
+    if (dx < -2) actor.classList.add("flip");
+    else if (dx > 2) actor.classList.remove("flip");
+
+    actor.style.left = `${p1.x}px`;
+    actor.style.top = `${p1.y}px`;
+
+    if (typeof actor.animate === "function") {
+      const anim = actor.animate([
+        { left: `${p1.x}px`, top: `${p1.y}px` },
+        { left: `${p2.x}px`, top: `${p2.y}px` }
+      ], { duration: segDur, easing: "linear", fill: "forwards" });
+      signal.anim = anim;
+      await new Promise(res => {
+        anim.onfinish = res;
+        anim.oncancel = res;
+      });
+      signal.anim = null;
+      if (signal.aborted) {
+        try { anim.cancel(); } catch (_) {}
+        return;
+      }
+      actor.style.left = `${p2.x}px`;
+      actor.style.top = `${p2.y}px`;
+      try { anim.cancel(); } catch (_) {}
+    } else {
+      actor.style.left = `${p2.x}px`;
+      actor.style.top = `${p2.y}px`;
+      await new Promise(r => setTimeout(r, segDur));
+    }
+  }
+
+  actor.classList.remove("walking");
+}
+
+/** Execute a full walk: leave desk, walk to target, speak bubble, walk back. */
+async function runWalk(el, walker, target, fx, speed) {
+  const fxLayer = el.querySelector(".fx-layer") || el;
+  const roles = (el.dataset.roles ? el.dataset.roles.split(":")[0].split(",") : []).filter(Boolean);
+  const rooms = el._rooms;
+  const desks = deskLayout(roles, rooms);
+
+  const forwardPath = findWalkPath(walker, target, desks, rooms);
+  if (forwardPath.length < 2) {
+    finishWalk(el, walker);
+    return;
+  }
+
+  const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const timing = walkDuration(speed, reduced);
+
+  const walkerDesk = walker === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(walker)}"]`);
+  walkerDesk?.classList.add("away");
+
+  const actor = document.createElement("div");
+  actor.className = "actor";
+  actor.dataset.role = walker;
+  actor.style.left = `${forwardPath[0].x}px`;
+  actor.style.top = `${forwardPath[0].y}px`;
+  actor.innerHTML = `<div class="char">${sprite(walker)}</div>`;
+  fxLayer.append(actor);
+
+  const ctrl = {
+    aborted: false,
+    anim: null,
+    timer: null,
+    abort() {
+      this.aborted = true;
+      if (this.anim) try { this.anim.cancel(); } catch (_) {}
+      if (this.timer) clearTimeout(this.timer);
+    }
+  };
+  activeAnimControllers.add(ctrl);
+
+  try {
+    // 1. Walk forward to target
+    await animatePath(actor, forwardPath, timing.legDuration, ctrl);
+    if (ctrl.aborted) return;
+
+    // 2. Arrive and display speech bubble
+    const { text, cls } = getBubbleContent(fx);
+    const bubble = document.createElement("div");
+    bubble.className = "actor-bubble" + (cls ? ` ${cls}` : "");
+    bubble.textContent = text;
+    actor.append(bubble);
+
+    // Also pulse target desk
+    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
+    targetDesk?.classList.add("ping");
+    setTimeout(() => targetDesk?.classList.remove("ping"), 600);
+
+    await new Promise(res => {
+      ctrl.timer = setTimeout(res, timing.talkDuration);
+    });
+    bubble.remove();
+    if (ctrl.aborted) return;
+
+    // 3. Walk back to own desk
+    const returnPath = forwardPath.slice().reverse();
+    await animatePath(actor, returnPath, timing.legDuration, ctrl);
+  } finally {
+    activeAnimControllers.delete(ctrl);
+    actor.remove();
+    walkerDesk?.classList.remove("away");
+    finishWalk(el, walker);
+  }
+}
+
+function finishWalk(el, walker) {
+  const next = globalWalkQueue.finish(walker);
+  if (next) {
+    runWalk(el, next.walker, next.target, next.fx, next.speed);
+  }
+}
+
 /**
- * Animate one interaction effect from the reducer's queue: a parcel flying along a curve, leaving a fading trail.
+ * Handle interaction effect by walking characters and speech bubbles instead of flying envelopes.
  * @param {HTMLElement} el office element
  * @param {{kind:string, from:string, to:string, label:string}} fx
  * @param {number} speed playback speed multiplier (live = 1)
  */
 export function playEffect(el, fx, speed = 1) {
-  const layer = el.querySelector(".fx-layer");
-  if (!layer || speed === Infinity || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const a = point(el, fx.from), b = point(el, fx.to);
-  const dur = Math.max(450, 2600 / speed);
-  const target = fx.to === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(fx.to)}"]`);
-  if (fx.kind === "approval") {
-    const src = el.querySelector(`.desk[data-role="${CSS.escape(fx.from)}"]`);
-    src?.classList.add("ping");
-    setTimeout(() => src?.classList.remove("ping"), 1600);
-  }
-  const d = curve(a, b);
-  // trail: draws in with the parcel, then fades
-  const trails = el.querySelector(".links .trails");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", d);
-  path.setAttribute("class", `trail ${fx.kind}`);
-  trails.append(path);
-  const len = path.getTotalLength();
-  path.style.strokeDasharray = `${len}`;
-  path.animate([{ strokeDashoffset: len, opacity: 1 }, { strokeDashoffset: 0, opacity: 1, offset: 0.35 }, { strokeDashoffset: 0, opacity: 0.9, offset: 0.6 }, { strokeDashoffset: 0, opacity: 0 }],
-    { duration: dur * 3.2, easing: "ease-out", fill: "forwards" }).finished.then(() => path.remove(), () => path.remove());
+  if (!el || !fx) return;
 
-  const icon = { handoff: ICONS.envelope, checkpoint: ICONS.flag, reply: ICONS.reply, approval: ICONS.alert }[fx.kind] ?? ICONS.envelope;
-  const node = document.createElement("div");
-  node.className = `fx fx-${fx.kind}`;
-  node.style.offsetPath = `path("${d}")`;
-  node.innerHTML = `<div class="icon">${icon}</div>${fx.label ? `<div class="label">${esc(head(plain(fx.label), 56))}</div>` : ""}`;
-  layer.append(node);
-  node.animate([
-    { offsetDistance: "0%", opacity: 0, transform: "scale(.6)" },
-    { opacity: 1, transform: "scale(1)", offset: 0.12 },
-    { offsetDistance: "100%", opacity: 1, transform: "scale(1)", offset: 0.82 },
-    { offsetDistance: "100%", opacity: 0, transform: "scale(.7)" },
-  ], { duration: dur, easing: "ease-in-out", fill: "forwards" }).finished.then(() => node.remove(), () => node.remove());
-  setTimeout(() => { target?.classList.add("ping"); setTimeout(() => target?.classList.remove("ping"), 900); }, dur * 0.8);
+  // Determine walker and target according to interaction rules:
+  // - reply: manager goes to user at ENTRANCE
+  // - approval / checkpoint: role goes to manager
+  // - handoff / done / failed: sender goes to recipient
+  let walker = fx.from;
+  let target = fx.to;
+
+  if (fx.kind === "reply") {
+    walker = "manager";
+    target = "user";
+  } else if (fx.kind === "checkpoint" || fx.kind === "approval") {
+    walker = fx.from;
+    target = "manager";
+  }
+
+  if (!walker || !target || walker === target) {
+    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
+    if (targetDesk) {
+      targetDesk.classList.add("ping");
+      setTimeout(() => targetDesk.classList.remove("ping"), 300);
+    }
+    return;
+  }
+
+  const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const timing = walkDuration(speed, reduced);
+
+  // Instant or reduced motion mode: flash bubble at target desk without walking
+  if (timing.isInstant) {
+    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
+    if (targetDesk) {
+      targetDesk.classList.add("ping");
+      const { text, cls } = getBubbleContent(fx);
+      const b = targetDesk.querySelector(".bubble");
+      if (b) {
+        const prev = b.textContent;
+        const prevCls = b.className;
+        b.textContent = text;
+        b.className = "bubble" + (cls ? ` ${cls}` : "");
+        setTimeout(() => {
+          if (b.textContent === text) {
+            b.textContent = prev;
+            b.className = prevCls;
+          }
+          targetDesk.classList.remove("ping");
+        }, 350);
+      }
+    }
+    return;
+  }
+
+  // Queue walk with Single Presence protection
+  const status = globalWalkQueue.enqueue(walker, { walker, target, fx, speed });
+  if (status === "overflow") {
+    // Congested replay at x16: skip walking animation to protect performance
+    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
+    targetDesk?.classList.add("ping");
+    setTimeout(() => targetDesk?.classList.remove("ping"), 200);
+    return;
+  }
+  if (status === "queued") {
+    return;
+  }
+
+  runWalk(el, walker, target, fx, speed);
 }
+

@@ -372,7 +372,14 @@ a per-role sandbox is the planned upgrade.
 - **Office customization & dynamic rooms (`layout.js`, `scene.js`, `office-dialog.js`).**
   Workspaces support dynamic 1–6 room configurations and role assignments stored in `<workspace>/.company/config.json`.
   Users can pick from preset templates (`/offices`) or customize rooms in the UI. `deskLayout` computes
-  desk coordinates dynamically per room without overlap while keeping the entrance and corridor at `y >= 480`.
+  desk coordinates dynamically per room without overlap (>= 140px Euclidean spacing) while keeping the entrance and corridor at `y >= 480`.
+- **Character walk animations & interaction speech bubbles (`office.js`, `layout.js`, `sprites.js`).**
+  Replaces static link arrows and flying envelope FX with pixel art walking characters and interaction speech bubbles:
+  1. `findWalkPath(fromRole, toRole, desks, rooms)` calculates waypoints through room doors and central corridors (or a direct line for peers in the same room).
+  2. Walk cycles use 2-frame pixel art foot stepping with horizontal sprite flipping (`transform: scaleX(-1)`) on leftward movement.
+  3. Single presence invariant: `RoleWalkQueue` strictly ensures a role never has duplicate characters on screen, queueing subsequent walk tasks and hiding the desk character (`.desk.away`) while away.
+  4. Interactions: task handoff (creator walks to assignee), task completion/failure (assignee walks result back), checkpoints and approvals (role walks to Manager, displaying `wait` or `need` bubbles), and manager replies (Manager walks to user at `ENTRANCE`).
+  5. Speed scaling & accessibility: replay speeds (x1 ~1.2s/leg, x4 ~300ms, x16 ~75ms, instant/0 flashes bubble directly without walking), respects `prefers-reduced-motion`, limits concurrent walkers to 3–4 for performance, and instantly cancels running animations via `cancelAllWalks` when switching back to live mode.
 - **Rendering safety.** Model text is escaped (`util.esc`) or rendered with the safe Markdown
   wrapper: raw HTML shows as text, only http(s) links, no images.
 - **Look and copy.** Light and dark themes follow the system through CSS tokens at the top of

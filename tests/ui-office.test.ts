@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 // @ts-ignore -- browser ES modules without type declarations
 import { sprite, SPRITE_ROWS } from "../ui/js/sprites.js";
 // @ts-ignore
-import { deskLayout } from "../ui/js/layout.js";
+import { deskLayout, findWalkPath } from "../ui/js/layout.js";
+// @ts-ignore
+import { RoleWalkQueue, walkDuration, getBubbleContent, renderOffice } from "../ui/js/office.js";
 
 test("sprite template is a 16x16 grid", () => {
   assert.equal(SPRITE_ROWS.length, 16);
@@ -95,6 +97,32 @@ test("deskLayout dynamic rooms: 1 room, 3 rooms, 6 rooms and fallback", () => {
   assert.equal(criticDesk.zone, "exec", "unassigned role placed into first room");
 });
 
+test("findWalkPath returns direct line for same room and door-corridor-door path across rooms", () => {
+  const roles = ["manager", "planner", "critic", "developer", "product-manager"];
+  const desks = deskLayout(roles);
+
+  // Same room: planner & critic are both in 'planning'
+  const sameRoomPath = findWalkPath("planner", "critic", desks);
+  assert.equal(sameRoomPath.length, 2, "Same room path has exactly 2 points: [start, end]");
+  assert.equal(sameRoomPath[0].x, desks.find((d: any) => d.role === "planner").px);
+  assert.equal(sameRoomPath[1].x, desks.find((d: any) => d.role === "critic").px);
+
+  // Different rooms: developer in 'engineering' -> manager in 'manager'
+  const diffRoomPath = findWalkPath("developer", "manager", desks);
+  assert.ok(diffRoomPath.length >= 4, "Cross-room path traverses doors and corridors");
+  assert.deepEqual(diffRoomPath[0], { x: desks.find((d: any) => d.role === "developer").px, y: desks.find((d: any) => d.role === "developer").py });
+  assert.deepEqual(diffRoomPath.at(-1), { x: desks.find((d: any) => d.role === "manager").px, y: desks.find((d: any) => d.role === "manager").py });
+
+  // Manager to user at ENTRANCE
+  const toUserPath = findWalkPath("manager", "user", desks);
+  assert.ok(toUserPath.length >= 3);
+  assert.deepEqual(toUserPath.at(-1), { x: 640, y: 628 });
+
+  // Edge cases: unknown role or same role
+  assert.deepEqual(findWalkPath("manager", "manager", desks), []);
+  assert.deepEqual(findWalkPath("manager", "non-existent", desks), []);
+});
+
 test("deskLayout ensures minimum center-to-center distance (>= 140px) between desks in the same room", () => {
   // Test case like "Product" and "Researcher" sharing room 2 in a 3-room layout
   const rooms = [
@@ -121,4 +149,122 @@ test("deskLayout ensures minimum center-to-center distance (>= 140px) between de
       }
     }
   }
+});
+
+test("RoleWalkQueue ensures single presence per role and enforces concurrency limit", () => {
+  const q = new RoleWalkQueue({ maxConcurrent: 3 });
+
+  // 1. Initial walk allowed
+  assert.equal(q.enqueue("manager", { id: 1 }), "running");
+  assert.ok(q.isRoleBusy("manager"));
+
+  // 2. Single presence: Same role cannot walk twice concurrently, gets queued
+  assert.equal(q.enqueue("manager", { id: 2 }), "queued");
+  assert.ok(q.isRoleBusy("manager"));
+
+  // 3. Different roles can walk up to maxConcurrent (3)
+  assert.equal(q.enqueue("developer", { id: 3 }), "running");
+  assert.equal(q.enqueue("critic", { id: 4 }), "running");
+
+  // 4. Concurrency limit reached: 4th distinct role overflows
+  assert.equal(q.enqueue("researcher", { id: 5 }), "overflow");
+
+  // 5. Finishing manager dequeues its next queued task and stays active
+  const next = q.finish("manager");
+  assert.deepEqual(next, { id: 2 });
+  assert.ok(q.isRoleBusy("manager"));
+
+  // Finishing the second task makes manager idle
+  const none = q.finish("manager");
+  assert.equal(none, null);
+  assert.equal(q.isRoleBusy("manager"), false);
+
+  // Clear resets everything
+  q.clear();
+  assert.equal(q.isRoleBusy("developer"), false);
+});
+
+test("walkDuration scales accurately with replay speed and respects accessibility", () => {
+  // Speed x1: 1.2s leg, 1.0s talk
+  const x1 = walkDuration(1, false);
+  assert.equal(x1.isInstant, false);
+  assert.equal(x1.legDuration, 1200);
+  assert.equal(x1.talkDuration, 1000);
+
+  // Speed x4: 300ms leg, 250ms talk
+  const x4 = walkDuration(4, false);
+  assert.equal(x4.isInstant, false);
+  assert.equal(x4.legDuration, 300);
+  assert.equal(x4.talkDuration, 250);
+
+  // Speed x16: 75ms leg, ~63ms talk
+  const x16 = walkDuration(16, false);
+  assert.equal(x16.isInstant, false);
+  assert.equal(x16.legDuration, 75);
+  assert.equal(x16.talkDuration, 63);
+
+  // Speed Infinity / 0: instant, zero walk
+  assert.equal(walkDuration(Infinity).isInstant, true);
+  assert.equal(walkDuration(0).isInstant, true);
+
+  // prefers-reduced-motion: always instant
+  const reduced = walkDuration(1, true);
+  assert.equal(reduced.isInstant, true);
+  assert.equal(reduced.legDuration, 0);
+  assert.equal(reduced.talkDuration, 0);
+});
+
+test("getBubbleContent formats text <= 60 chars and assigns warning/wait classes", () => {
+  const approval = getBubbleContent({ kind: "approval", label: "Cần duyệt hành động chi tiêu 1000 USD cho server" });
+  assert.equal(approval.cls, "need");
+  assert.ok(approval.text.length <= 60);
+
+  const checkpoint = getBubbleContent({ kind: "checkpoint", label: "Tiến độ vòng lặp số 1 hoàn tất báo cáo kỹ thuật" });
+  assert.equal(checkpoint.cls, "wait");
+  assert.ok(checkpoint.text.length <= 60);
+
+  const done = getBubbleContent({ kind: "done", label: "Đã tạo xong trang đăng nhập và kiểm thử giao diện" });
+  assert.match(done.text, /^Xong:/);
+  assert.ok(done.text.length <= 60);
+
+  const failed = getBubbleContent({ kind: "failed", label: "Không tìm thấy file cấu hình trong thư mục gốc" });
+  assert.equal(failed.cls, "need");
+  assert.match(failed.text, /^Lỗi:/);
+  assert.ok(failed.text.length <= 60);
+
+  const longText = getBubbleContent({
+    kind: "handoff",
+    label: "A very long task goal that goes on and on and exceeds sixty characters by quite a wide margin",
+  });
+  assert.ok(longText.text.length <= 60);
+  assert.ok(longText.text.endsWith("…"));
+});
+
+test("office DOM render does not contain link lines or link-end circles", () => {
+  const mockEl: any = {
+    dataset: {},
+    innerHTML: "",
+    style: { setProperty() {}, width: "", height: "" },
+    parentElement: { clientWidth: 1280, clientHeight: 720 },
+    querySelectorAll() { return []; },
+    querySelector() { return null; },
+    setAttribute() {},
+    classList: { toggle() {}, add() {}, remove() {} },
+  };
+
+  const state = {
+    roles: { manager: { status: "working" }, developer: { status: "working" } },
+    streaming: {},
+    tasks: { t1: { id: "t1", from: "manager", to: "developer", status: "running" } },
+    approvals: {},
+    runStatus: "active",
+  };
+
+  renderOffice(mockEl, state, { names: { manager: "Manager", developer: "Developer" }, onSelect: () => {} });
+
+  // Verify that SVG link elements (.link, .link-end, .links) are not present in rendered DOM
+  assert.ok(!mockEl.innerHTML.includes('class="link '));
+  assert.ok(!mockEl.innerHTML.includes('class="link-end'));
+  assert.ok(!mockEl.innerHTML.includes('<svg class="links"'));
+  assert.ok(!mockEl.innerHTML.includes('<circle class="link-end'));
 });

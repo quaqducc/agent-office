@@ -81,6 +81,9 @@ export function reduce(state, e) {
         if (s.streaming[e.role] !== undefined) { const { [e.role]: _gone, ...rest } = s.streaming; s.streaming = rest; }
         const caller = t && s.roles[t.from];
         if (caller && caller.status === "waiting" && caller.waitingOn === t.to) setRole(s, t.from, { status: "working", waitingOn: undefined });
+        if ((d.status === "done" || d.status === "failed") && t && t.from && t.from !== "user") {
+          pushEffect(s, e, d.status === "done" ? "done" : "failed", e.role, t.from, d.status === "done" ? (t.result ? `Xong: ${t.result}` : "Xong việc") : `Lỗi: ${d.reason ?? "thất bại"}`);
+        }
       }
       break;
     }

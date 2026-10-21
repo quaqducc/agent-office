@@ -75,14 +75,22 @@ function palette(role) {
   return { s: SKIN[n % 4], h: ["#2b2118", "#5a3825", "#1d1d1d"][n % 3], c: FALLBACK_SHIRTS[n % FALLBACK_SHIRTS.length], p: "#2d3240", a: "#2d3240", acc: null, long: n % 2 === 0 };
 }
 
-/** Pixel-art SVG markup for a role (deterministic). */
-export function sprite(role) {
+/** Pixel-art SVG markup for a role (deterministic), with optional walking frames (0: stand, 1: step left, 2: step right). */
+export function sprite(role, frame = 0) {
   const pal = palette(role);
   const colors = {
     o: "#231a17", h: pal.h, s: pal.s, S: shade(pal.s, 0.12), e: "#1b1b22", b: "#f08f8f", m: "#9c3d33",
     c: pal.c, C: shade(pal.c, 0.22), p: pal.p, k: "#1a1a1f",
   };
-  const grid = SPRITE_ROWS.map(r => [...r].map(ch => colors[ch] ?? null));
+  const rows = [...SPRITE_ROWS];
+  if (frame === 1) {
+    rows[14] = ".opppoooopppo...";
+    rows[15] = ".okkko...okkko..";
+  } else if (frame === 2) {
+    rows[14] = "...opppoooopppo.";
+    rows[15] = "..okkko...okkko.";
+  }
+  const grid = rows.map(r => [...r].map(ch => colors[ch] ?? null));
   if (pal.long) for (const r of [7, 8, 9]) { grid[r][2] = pal.h; grid[r][13] = pal.h; grid[r][3] = r === 7 ? pal.h : grid[r][3]; grid[r][12] = r === 7 ? pal.h : grid[r][12]; }
   grid[3][5] = grid[3][6] = shade(pal.h, -0.35); // hair highlight
   for (const [r, c] of ACCESSORIES[pal.acc] ?? []) grid[r][c] = pal.a;

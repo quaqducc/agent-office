@@ -3,7 +3,7 @@ import { Marked } from "/vendor/marked.js";
 import { createMarkdown } from "./markdown.js";
 import { api, subscribe } from "./api.js";
 import { initialState, mergeEvents, reduce } from "./state.js";
-import { fit, playEffect, renderOffice } from "./office.js";
+import { cancelAllWalks, fit, playEffect, renderOffice } from "./office.js";
 import { deskLayout } from "./layout.js";
 import { icon } from "./icons.js";
 import { duration } from "./derive.js";
@@ -379,11 +379,13 @@ function stepReplay() {
 function stopReplay() {
   if (app.replay) clearTimeout(app.replay.timer);
   app.replay = null;
+  cancelAllWalks(el.office);
 }
 
 function goLive() {
   app.gen++;
   stopReplay();
+  cancelAllWalks(el.office);
   app.mode = "live";
   resetPanels();
   app.fxDone.live = app.live.effects.length;
