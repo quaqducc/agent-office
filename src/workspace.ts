@@ -128,15 +128,21 @@ export class WorkspaceStore {
     return { roles, limits: { ...DEFAULT_LIMITS, ...(raw.limits ?? {}) }, ...(template ? { template } : {}), ...(rooms ? { rooms } : {}) };
   }
 
-  saveConfig(ws: Workspace, patch: { roles: string[]; rooms?: RoomDef[]; template?: string }): WorkspaceConfig {
+  saveConfig(ws: Workspace, patch: { roles: string[]; rooms?: RoomDef[] | null; template?: string | null }): WorkspaceConfig {
     const f = join(companyDir(ws), "config.json");
     const raw = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
     const updated: any = {
       ...raw,
       roles: patch.roles,
     };
-    if (patch.rooms !== undefined) updated.rooms = patch.rooms;
-    if (patch.template !== undefined) updated.template = patch.template;
+    if (patch.rooms !== undefined) {
+      if (!patch.rooms || patch.rooms.length === 0) delete updated.rooms;
+      else updated.rooms = patch.rooms;
+    }
+    if (patch.template !== undefined) {
+      if (!patch.template) delete updated.template;
+      else updated.template = patch.template;
+    }
     writeFileSync(f, JSON.stringify(updated, null, 2));
     return this.config(ws);
   }

@@ -78,37 +78,51 @@ export function getRoomBoxes(count) {
 export function getRoomDeskSlots(box, count) {
   if (count <= 0) return [];
   const [rx, ry, rw, rh] = box;
-  const padX = Math.min(50, Math.floor(rw * 0.1));
-  const padYTop = Math.min(65, Math.floor(rh * 0.25));
-  const padYBottom = Math.min(40, Math.floor(rh * 0.15));
-  const usableW = rw - 2 * padX;
-  const usableH = rh - padYTop - padYBottom;
+  if (count === 1) return [[Math.round(rx + rw / 2), Math.round(ry + rh / 2)]];
 
-  if (count === 1) return [[Math.round(rx + rw / 2), Math.round(ry + padYTop + usableH / 2)]];
+  const minGap = 140;
+  // If height >= 190 and count >= 3, use 2 rows to keep min-dist >= 140
+  const maxRows = rh >= 190 && count >= 3 ? 2 : 1;
 
-  const rows = (rh > 250 && count >= 3) || count > 4 ? 2 : 1;
+  if (maxRows === 1) {
+    const slots = [];
+    const py = Math.round(ry + rh / 2);
+    const span = (count - 1) * Math.max(minGap, Math.min(220, (rw - 120) / (count - 1)));
+    const startX = rx + rw / 2 - span / 2;
+    const step = span / (count - 1);
+    for (let i = 0; i < count; i++) {
+      slots.push([Math.round(startX + i * step), py]);
+    }
+    return slots;
+  }
+
+  // 2 rows
+  const countR1 = Math.ceil(count / 2);
+  const countR2 = count - countR1;
+  const y1 = rh >= 300 ? Math.round(ry + rh * 0.3) : Math.round(ry + 35);
+  const y2 = rh >= 300 ? Math.round(ry + rh * 0.72) : Math.round(ry + rh - 31);
   const slots = [];
 
-  if (rows === 1) {
-    const stepX = usableW / (count + 1);
-    const py = Math.round(ry + padYTop + usableH / 2);
-    for (let i = 0; i < count; i++) {
-      slots.push([Math.round(rx + padX + stepX * (i + 1)), py]);
-    }
+  // Row 1
+  if (countR1 === 1) {
+    slots.push([Math.round(rx + rw / 2), y1]);
   } else {
-    const countR1 = Math.ceil(count / 2);
-    const countR2 = count - countR1;
-    const y1 = Math.round(ry + padYTop + usableH * 0.3);
-    const y2 = Math.round(ry + padYTop + usableH * 0.8);
-    const step1 = usableW / (countR1 + 1);
-    for (let i = 0; i < countR1; i++) {
-      slots.push([Math.round(rx + padX + step1 * (i + 1)), y1]);
-    }
-    const step2 = usableW / (countR2 + 1);
-    for (let i = 0; i < countR2; i++) {
-      slots.push([Math.round(rx + padX + step2 * (i + 1)), y2]);
-    }
+    const span1 = (countR1 - 1) * Math.max(minGap, Math.min(240, (rw - 120) / (countR1 - 1)));
+    const startX1 = rx + rw / 2 - span1 / 2;
+    const step1 = span1 / (countR1 - 1);
+    for (let i = 0; i < countR1; i++) slots.push([Math.round(startX1 + i * step1), y1]);
   }
+
+  // Row 2
+  if (countR2 === 1) {
+    slots.push([Math.round(rx + rw / 2), y2]);
+  } else {
+    const span2 = (countR2 - 1) * Math.max(minGap, Math.min(240, (rw - 120) / (countR2 - 1)));
+    const startX2 = rx + rw / 2 - span2 / 2;
+    const step2 = span2 / (countR2 - 1);
+    for (let i = 0; i < countR2; i++) slots.push([Math.round(startX2 + i * step2), y2]);
+  }
+
   return slots;
 }
 

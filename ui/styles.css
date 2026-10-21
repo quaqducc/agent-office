@@ -759,7 +759,68 @@ h1, h2, h3 { margin: 0; }
   .tabs button { padding: 6px 4px; }
 }
 /* Office customization dialog */
-.office-dialog-body { display: grid; gap: 18px; }
+#office-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 860px);
+}
+#office-dialog .sheet-head {
+  flex-shrink: 0;
+}
+#office-dialog .sheet-body.office-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+#office-dialog .sheet-foot {
+  flex-shrink: 0;
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.office-warning-banner {
+  background: var(--approval-soft);
+  border: 1px solid var(--approval-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 8px;
+}
+.office-warning-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--approval-ink);
+  font-weight: 600;
+  font-size: 13px;
+}
+.office-warning-items {
+  display: grid;
+  gap: 6px;
+}
+.office-warning-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.btn.primary-subtle {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.btn.primary-subtle:hover {
+  background: var(--accent);
+  color: #fff;
+}
 .office-sec { display: grid; gap: 10px; }
 .office-sec-title { font-size: 14px; font-weight: 600; color: var(--ink); margin: 0; }
 .office-sec-header { display: flex; justify-content: space-between; align-items: center; }
@@ -789,7 +850,7 @@ h1, h2, h3 { margin: 0; }
   background: var(--panel-2); font-size: 12px; border: 1px solid var(--line-2);
 }
 .role-chip svg { width: 14px; height: 14px; }
-.office-roles-list { display: grid; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
+.office-roles-list { display: grid; gap: 6px; }
 .office-role-row {
   display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;
   border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel);

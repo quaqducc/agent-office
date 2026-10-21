@@ -246,7 +246,9 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         if (!Array.isArray(b.roles)) throw new HttpError(400, "roles must be an array");
         const installed = roleIds();
         const missing = b.roles.filter((r: string) => !installed.includes(r));
-        if (missing.length > 0) throw new HttpError(400, `uninstalled roles: ${missing.join(", ")}`, { missing });
+        if (missing.length > 0) {
+          throw new HttpError(400, `Các vai trò sau chưa được cài đặt: ${missing.join(", ")}`, { missing });
+        }
         const cfg = store.saveConfig(ws, { roles: b.roles, rooms: b.rooms, template: b.template });
         const existing = ctxs.get(parts[1]);
         if (existing && !existing.router.activeRunId()) {

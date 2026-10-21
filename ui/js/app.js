@@ -690,6 +690,7 @@ $("#open-office")?.addEventListener("click", () => {
   openOfficeDialog({
     wsId: app.wsId,
     toast,
+    reloadRoles: () => reloadRoles().catch(e => toast(e.message, "bad")),
     openStore: () => openStore({ toast, ask, onChange: () => reloadRoles().catch(e => toast(e.message, "bad")) }),
     onSave: updated => {
       app.rooms = updated.rooms ?? null;

@@ -94,3 +94,31 @@ test("deskLayout dynamic rooms: 1 room, 3 rooms, 6 rooms and fallback", () => {
   assert.ok(criticDesk);
   assert.equal(criticDesk.zone, "exec", "unassigned role placed into first room");
 });
+
+test("deskLayout ensures minimum center-to-center distance (>= 140px) between desks in the same room", () => {
+  // Test case like "Product" and "Researcher" sharing room 2 in a 3-room layout
+  const rooms = [
+    { id: "exec", name: "Ban Giám Đốc", roles: ["manager"] },
+    { id: "product", name: "Sản Phẩm & Nghiên Cứu", roles: ["product-manager", "researcher"] },
+    { id: "eng", name: "Kỹ Thuật", roles: ["developer", "critic"] },
+  ];
+  const desks = deskLayout(["manager", "product-manager", "researcher", "developer", "critic"], rooms);
+
+  const byRoom: Record<string, any[]> = {};
+  for (const d of desks) {
+    byRoom[d.zone] = byRoom[d.zone] || [];
+    byRoom[d.zone].push(d);
+  }
+
+  for (const [zone, rDesks] of Object.entries(byRoom)) {
+    for (let i = 0; i < rDesks.length; i++) {
+      for (let j = i + 1; j < rDesks.length; j++) {
+        const dist = Math.hypot(rDesks[i].px - rDesks[j].px, rDesks[i].py - rDesks[j].py);
+        assert.ok(
+          dist >= 139.9,
+          `Room ${zone}: distance between ${rDesks[i].role} and ${rDesks[j].role} is ${dist.toFixed(1)}px, must be >= 140px`
+        );
+      }
+    }
+  }
+});

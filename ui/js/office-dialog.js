@@ -1,6 +1,7 @@
 // Office customization dialog: templates, dynamic rooms, and role room assignments.
 import { api } from "./api.js";
 import { icon } from "./icons.js";
+import { ZONES } from "./layout.js";
 import { sprite } from "./sprites.js";
 import { esc } from "./util.js";
 
@@ -8,7 +9,8 @@ import { esc } from "./util.js";
  * @param {{
  *   wsId: string,
  *   toast: (m: string, k?: string) => void,
- *   openStore: () => void,
+ *   reloadRoles?: () => Promise<void> | void,
+ *   openStore?: () => void,
  *   onSave: (cfg: { roles: string[]; rooms: any[]; template?: string }) => void
  * }} ctx
  */
@@ -31,37 +33,68 @@ export async function openOfficeDialog(ctx) {
   let templates = [];
   let installedRoles = [];
   let currentCfg = null;
+  let storeState = null;
 
   try {
-    const [tList, rList, cfg] = await Promise.all([
+    const [tList, rList, cfg, sState] = await Promise.all([
       api.offices(),
       api.roles(),
       api.config(ctx.wsId),
+      api.store().catch(() => ({ roles: [] })),
     ]);
     templates = tList;
     installedRoles = rList;
     currentCfg = cfg;
+    storeState = sState;
   } catch (err) {
     ctx.toast(err.message, "bad");
     d.close();
     return;
   }
 
+  // Build role display name lookup map
+  const roleNames = {};
+  for (const r of storeState?.roles || []) {
+    if (r.id && r.name) roleNames[r.id] = r.name;
+  }
+  for (const r of installedRoles || []) {
+    if (r.id && r.name) roleNames[r.id] = r.name;
+  }
+  const getRoleName = id => roleNames[id] || id;
+
   const installedIds = new Set(installedRoles.map(r => r.id));
-  let selectedTemplate = currentCfg.template || "";
   let activeRoles = new Set(currentCfg.roles || ["manager"]);
-
-  // Initialize rooms: use workspace rooms, or fallback to startup-mvp default rooms or 3 standard rooms
-  let rooms = currentCfg.rooms && currentCfg.rooms.length > 0
-    ? JSON.parse(JSON.stringify(currentCfg.rooms))
-    : [
-        { id: "exec", name: "Ban Giám Đốc", roles: ["manager"] },
-        { id: "product", name: "Sản Phẩm & Nghiên Cứu", roles: [] },
-        { id: "eng", name: "Kỹ Thuật", roles: [] },
-      ];
-
-  // Invariant check: manager always in activeRoles and assigned to room 0 if not assigned
   activeRoles.add("manager");
+
+  const hasConfiguredRooms = Boolean(currentCfg.rooms && currentCfg.rooms.length > 0);
+  let selectedTemplate = hasConfiguredRooms ? (currentCfg.template || "") : "default";
+
+  function getDefaultRooms(rolesSet) {
+    const assigned = new Set();
+    const res = ZONES.map(z => {
+      const inZone = (z.roles || []).filter(r => rolesSet.has(r));
+      inZone.forEach(r => assigned.add(r));
+      return {
+        id: z.id,
+        name: z.name,
+        roles: inZone,
+      };
+    });
+    const remaining = Array.from(rolesSet).filter(r => !assigned.has(r));
+    const spec = res.find(r => r.id === "specialists");
+    if (spec) {
+      spec.roles.push(...remaining);
+    } else if (res[0]) {
+      res[0].roles.push(...remaining);
+    }
+    return res;
+  }
+
+  // Initialize rooms: use workspace rooms if set, or default department rooms
+  let rooms = hasConfiguredRooms
+    ? JSON.parse(JSON.stringify(currentCfg.rooms))
+    : getDefaultRooms(activeRoles);
+
   ensureRoleAssignments();
 
   function ensureRoleAssignments() {
@@ -72,6 +105,9 @@ export async function openOfficeDialog(ctx) {
     }
     for (const r of activeRoles) {
       if (!assigned.has(r)) {
+        if (rooms.length === 0) {
+          rooms.push({ id: "exec", name: "Ban Giám Đốc", roles: [] });
+        }
         rooms[0].roles.push(r);
         assigned.add(r);
       }
@@ -81,12 +117,15 @@ export async function openOfficeDialog(ctx) {
   function render() {
     ensureRoleAssignments();
 
-    // Collect all candidate roles: installed roles + any roles mentioned in templates
+    // Check for uninstalled roles in active selection
+    const missingRoles = Array.from(activeRoles).filter(r => !installedIds.has(r));
+
+    // Collect all candidate roles: installed roles + template roles + active roles
     const allRoleIds = Array.from(new Set([
       ...installedRoles.map(r => r.id),
       ...templates.flatMap(t => t.roles),
       ...activeRoles,
-    ])).sort((a, b) => (a === "manager" ? -1 : b === "manager" ? 1 : a.localeCompare(b)));
+    ])).sort((a, b) => (a === "manager" ? -1 : b === "manager" ? 1 : getRoleName(a).localeCompare(getRoleName(b))));
 
     d.innerHTML = `<div class="sheet-head">
       <div>
@@ -97,9 +136,44 @@ export async function openOfficeDialog(ctx) {
     </div>
 
     <div class="sheet-body office-dialog-body">
+      ${missingRoles.length > 0 ? `
+        <div class="office-warning-banner">
+          <div class="office-warning-header">
+            ${icon("alert")}
+            <span>Một số vai trò trong cấu hình chưa được cài đặt:</span>
+          </div>
+          <div class="office-warning-items">
+            ${missingRoles.map(rid => `
+              <div class="office-warning-item">
+                <span>Cần cài: <strong>${esc(getRoleName(rid))}</strong></span>
+                <button type="button" class="btn small primary-subtle" data-install-role="${esc(rid)}">
+                  ${icon("download")}Cài ngay
+                </button>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+
       <section class="office-sec">
         <h3 class="office-sec-title">Mẫu văn phòng (Templates)</h3>
         <div class="office-templates-grid">
+          <div class="office-tpl-card${selectedTemplate === "default" ? " selected" : ""}" data-tpl="default">
+            <div class="tpl-head">
+              <div class="tpl-title">
+                <span class="tpl-name">Mặc định (theo phòng ban)</span>
+                ${selectedTemplate === "default" ? `<span class="tag good">Đang chọn</span>` : ""}
+              </div>
+              <small class="tpl-desc">Sơ đồ 4 phòng ban chuẩn cùng khu Chuyên gia theo mặc định</small>
+            </div>
+            <div class="tpl-rooms">
+              <span class="tag small">Phòng Manager</span>
+              <span class="tag small">Chiến lược & Sản phẩm</span>
+              <span class="tag small">Kế hoạch & Phản biện</span>
+              <span class="tag small">Kỹ thuật</span>
+              <span class="tag small">Chuyên gia</span>
+            </div>
+          </div>
           ${templates.map(t => {
             const isSel = selectedTemplate === t.id;
             return `
@@ -136,7 +210,7 @@ export async function openOfficeDialog(ctx) {
               </div>
               <div class="room-roles-summary">
                 ${rm.roles.map(r => `
-                  <span class="role-chip" title="${esc(r)}">${sprite(r)}<span>${esc(r)}</span></span>
+                  <span class="role-chip" title="${esc(getRoleName(r))}">${sprite(r)}<span>${esc(getRoleName(r))}</span></span>
                 `).join("")}
                 ${rm.roles.length === 0 ? `<span class="muted text-sm">(Chưa có role nào)</span>` : ""}
               </div>
@@ -163,13 +237,15 @@ export async function openOfficeDialog(ctx) {
                   <input type="checkbox" data-role="${esc(roleId)}" ${isEnabled ? "checked" : ""} ${isManager || !isInstalled ? "disabled" : ""} />
                   <span class="role-avatar">${sprite(roleId)}</span>
                   <div class="role-meta-col">
-                    <span class="role-name">${esc(roleId)}</span>
+                    <span class="role-name">${esc(getRoleName(roleId))}</span>
                     ${!isInstalled ? `<span class="tag warn small">Chưa cài</span>` : ""}
                   </div>
                 </label>
                 <div class="role-action-col">
                   ${!isInstalled ? `
-                    <button type="button" class="btn small" data-open-store="1">${icon("store")}Cài đặt</button>
+                    <button type="button" class="btn small primary-subtle" data-install-role="${esc(roleId)}">
+                      ${icon("download")}Cài ngay
+                    </button>
                   ` : isEnabled ? `
                     <select class="input select-room" data-role="${esc(roleId)}">
                       ${rooms.map((rm, idx) => `
@@ -200,6 +276,12 @@ export async function openOfficeDialog(ctx) {
     d.querySelectorAll("[data-tpl]").forEach(elCard => {
       elCard.addEventListener("click", () => {
         const tplId = elCard.dataset.tpl;
+        if (tplId === "default") {
+          selectedTemplate = "default";
+          rooms = getDefaultRooms(activeRoles);
+          render();
+          return;
+        }
         const tpl = templates.find(t => t.id === tplId);
         if (!tpl) return;
         selectedTemplate = tpl.id;
@@ -225,6 +307,7 @@ export async function openOfficeDialog(ctx) {
     // Add room
     d.querySelector('[data-act="add-room"]')?.addEventListener("click", () => {
       if (rooms.length >= 6) return;
+      selectedTemplate = "";
       rooms.push({
         id: `room-${Date.now()}`,
         name: `Phòng ${rooms.length + 1}`,
@@ -237,6 +320,7 @@ export async function openOfficeDialog(ctx) {
     d.querySelectorAll("[data-del-room]").forEach(b => {
       b.addEventListener("click", () => {
         if (rooms.length <= 1) return;
+        selectedTemplate = "";
         const idx = Number(b.dataset.delRoom);
         const deletedRoles = rooms[idx].roles || [];
         rooms.splice(idx, 1);
@@ -255,7 +339,7 @@ export async function openOfficeDialog(ctx) {
         if (roleId === "manager") return;
         if (e.target.checked) {
           activeRoles.add(roleId);
-          if (!rooms[0].roles.includes(roleId)) rooms[0].roles.push(roleId);
+          if (rooms[0] && !rooms[0].roles.includes(roleId)) rooms[0].roles.push(roleId);
         } else {
           activeRoles.delete(roleId);
           for (const rm of rooms) rm.roles = rm.roles.filter(r => r !== roleId);
@@ -275,11 +359,25 @@ export async function openOfficeDialog(ctx) {
       });
     });
 
-    // Open store button
-    d.querySelectorAll("[data-open-store]").forEach(b => {
-      b.addEventListener("click", () => {
-        d.close();
-        ctx.openStore();
+    // Inline install role button
+    d.querySelectorAll("[data-install-role]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const rid = btn.dataset.installRole;
+        btn.disabled = true;
+        btn.textContent = "Đang cài...";
+        try {
+          await api.installRole(rid);
+          installedIds.add(rid);
+          ctx.toast(`Đã cài đặt vai trò ${getRoleName(rid)}`, "good");
+          if (ctx.reloadRoles) {
+            try { await ctx.reloadRoles(); } catch (_) {}
+          }
+          render();
+        } catch (err) {
+          ctx.toast(`Lỗi cài đặt ${getRoleName(rid)}: ${err.message}`, "bad");
+          btn.disabled = false;
+          btn.innerHTML = `${icon("download")}Cài ngay`;
+        }
       });
     });
 
@@ -291,17 +389,30 @@ export async function openOfficeDialog(ctx) {
       const saveBtn = d.querySelector('[data-act="save"]');
       if (saveBtn) saveBtn.disabled = true;
 
+      const payload = selectedTemplate === "default"
+        ? { roles: rolesArray, rooms: null, template: null }
+        : {
+            template: selectedTemplate || undefined,
+            roles: rolesArray,
+            rooms: rooms.map(rm => ({ id: rm.id, name: rm.name, roles: rm.roles })),
+          };
+
       try {
-        const updated = await api.saveWorkspaceConfig(ctx.wsId, {
-          template: selectedTemplate || undefined,
-          roles: rolesArray,
-          rooms: rooms.map(rm => ({ id: rm.id, name: rm.name, roles: rm.roles })),
-        });
+        const updated = await api.saveWorkspaceConfig(ctx.wsId, payload);
         ctx.toast("Đã lưu cấu hình văn phòng thành công", "good");
         d.close();
         ctx.onSave(updated);
       } catch (err) {
-        ctx.toast(err.message, "bad");
+        let msg = err.message || "Lỗi lưu cấu hình";
+        if (err.missing && Array.isArray(err.missing) && err.missing.length > 0) {
+          const missingNames = err.missing.map(getRoleName).join(", ");
+          msg = `Các vai trò sau chưa được cài đặt: ${missingNames}`;
+        } else if (msg.includes("uninstalled roles:")) {
+          const rawList = msg.replace("uninstalled roles:", "").trim();
+          const names = rawList.split(",").map(s => getRoleName(s.trim())).join(", ");
+          msg = `Các vai trò sau chưa được cài đặt: ${names}`;
+        }
+        ctx.toast(msg, "bad");
         if (saveBtn) saveBtn.disabled = false;
       }
     });

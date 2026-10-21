@@ -78,13 +78,29 @@ export function sceneSvg({ zones, rooms }) {
     activeRooms.forEach((rm, i) => {
       const [x, y, w, h] = boxes[i];
       s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${patterns[i % patterns.length]})"/>`;
-      s += r(x + 10, y + 15, w - 20, h - 25, "s-rug", ' rx="6"');
-      s += r(x + 16, y + 21, w - 32, h - 37, "s-rug-in", ' rx="4"');
+      const hasManager = rm.roles && rm.roles.includes("manager");
+      if (hasManager) {
+        const rugW = Math.max(60, w - 60);
+        const rugH = Math.max(60, h - 70);
+        const rugX = x + Math.round((w - rugW) / 2);
+        const rugY = y + Math.round((h - rugH) / 2);
+        s += r(rugX, rugY, rugW, rugH, "s-rug", ' rx="6"');
+        s += r(rugX + 6, rugY + 6, rugW - 12, rugH - 12, "s-rug-in", ' rx="4"');
+      }
     });
     s += r(600, 672, 80, 30, "s-mat", ' rx="4"') + r(606, 678, 68, 18, "s-mat-in", ' rx="2"');
     // outer north wall with windows
     s += r(0, 0, W, 10, "s-cap") + r(0, 10, W, 38, "s-face") + r(0, 46, W, 2, "s-base");
-    s += windowAt(180, 84) + windowAt(480, 120) + windowAt(800, 120) + windowAt(1100, 84);
+    // Place windows in north-row rooms without overlapping the room signs
+    activeRooms.forEach((rm, i) => {
+      const [x, y, w] = boxes[i];
+      if (y <= 50) {
+        const signW = Math.round(rm.name.length * 9.2 + 24);
+        const winLeft = x + 20 + signW + 20;
+        const winW = Math.min(120, x + w - 20 - winLeft);
+        if (winW >= 70) s += windowAt(winLeft, winW);
+      }
+    });
     // bottom wall separating rooms from lobby
     s += hWall(12, W - 12, 470, [600, 680]);
     if (n >= 4) {
