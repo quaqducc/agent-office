@@ -1,6 +1,6 @@
 // Static office backdrop as one SVG in scene pixels: floors, walls, windows, signs and furniture.
 // Colours come from CSS classes (styles.css → .scene-*), so light/dark themes restyle it.
-import { getRoomBoxes, SCENE, ZONES } from "./layout.js";
+import { getRoomBoxes, getRoomDoors, SCENE, ZONES } from "./layout.js";
 import { esc } from "./util.js";
 
 const r = (x, y, w, h, cls, extra = "") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${cls}"${extra}/>`;
@@ -18,11 +18,44 @@ const PATTERNS = `<defs>
   </pattern>
 </defs>`;
 
-/** Horizontal wall with optional door gap: cap on top, visible face below (3/4 view). */
-function hWall(x1, x2, y, gap) {
-  const parts = gap ? [[x1, gap[0]], [gap[1], x2]] : [[x1, x2]];
-  return parts.map(([a, b]) => r(a, y, b - a, 10, "s-cap") + r(a, y + 10, b - a, 18, "s-face") + r(a, y + 26, b - a, 2, "s-base")).join("") +
-    (gap ? r(gap[0], y, gap[1] - gap[0], 28, "s-door") : "");
+/** Horizontal wall with optional door gaps: cap on top, visible face below (3/4 view). */
+function hWall(x1, x2, y, gaps) {
+  if (!gaps || gaps.length === 0) {
+    return r(x1, y, x2 - x1, 10, "s-cap") + r(x1, y + 10, x2 - x1, 18, "s-face") + r(x1, y + 26, x2 - x1, 2, "s-base");
+  }
+  const rawList = Array.isArray(gaps[0]) ? gaps : [gaps];
+  const sorted = rawList
+    .map(([a, b]) => [Math.max(x1, Math.min(x2, a)), Math.max(x1, Math.min(x2, b))])
+    .filter(([a, b]) => b > a)
+    .sort((a, b) => a[0] - b[0]);
+
+  const merged = [];
+  for (const [a, b] of sorted) {
+    if (!merged.length) {
+      merged.push([a, b]);
+    } else {
+      const prev = merged[merged.length - 1];
+      if (a <= prev[1]) {
+        prev[1] = Math.max(prev[1], b);
+      } else {
+        merged.push([a, b]);
+      }
+    }
+  }
+
+  let cur = x1;
+  let s = "";
+  for (const [ga, gb] of merged) {
+    if (ga > cur) {
+      s += r(cur, y, ga - cur, 10, "s-cap") + r(cur, y + 10, ga - cur, 18, "s-face") + r(cur, y + 26, ga - cur, 2, "s-base");
+    }
+    s += r(ga, y, gb - ga, 28, "s-door");
+    cur = Math.max(cur, gb);
+  }
+  if (cur < x2) {
+    s += r(cur, y, x2 - cur, 10, "s-cap") + r(cur, y + 10, x2 - cur, 18, "s-face") + r(cur, y + 26, x2 - cur, 2, "s-base");
+  }
+  return s;
 }
 
 function windowAt(x, w) {
@@ -101,15 +134,35 @@ export function sceneSvg({ zones, rooms }) {
         if (winW >= 70) s += windowAt(winLeft, winW);
       }
     });
-    // bottom wall separating rooms from lobby
-    s += hWall(12, W - 12, 470, [600, 680]);
-    if (n >= 4) {
-      s += hWall(12, W - 12, 254, [600, 680]);
+    // Synchronize door openings with getRoomDoors
+    const roomDoors = getRoomDoors(rooms);
+    const gaps470 = [[600, 680]];
+    const gaps254 = [[600, 680]];
+    for (const rm of activeRooms) {
+      const pt = roomDoors[rm.id];
+      if (pt) {
+        const [dx, dy] = pt;
+        const gap = [dx - 36, dx + 36];
+        if (Math.abs(dy - 470) <= 10) gaps470.push(gap);
+        else if (Math.abs(dy - 254) <= 10) gaps254.push(gap);
+      }
     }
-    if (n === 2 || n === 4) {
+
+    // bottom wall separating rooms from lobby
+    s += hWall(12, W - 12, 470, gaps470);
+    if (n >= 4) {
+      s += hWall(12, W - 12, 254, gaps254);
+    }
+    if (n === 2) {
       s += r(635, 48, 10, 422, "s-cap");
-    } else if (n === 3 || n === 6) {
+    } else if (n === 4) {
+      s += r(635, 48, 10, 206, "s-cap");
+      s += r(635, 264, 10, 206, "s-cap");
+    } else if (n === 3) {
       s += r(424, 48, 10, 422, "s-cap") + r(846, 48, 10, 422, "s-cap");
+    } else if (n === 6) {
+      s += r(424, 48, 10, 206, "s-cap") + r(846, 48, 10, 206, "s-cap");
+      s += r(424, 264, 10, 206, "s-cap") + r(846, 264, 10, 206, "s-cap");
     } else if (n === 5) {
       s += r(424, 48, 10, 206, "s-cap") + r(846, 48, 10, 206, "s-cap");
       s += r(635, 264, 10, 206, "s-cap");

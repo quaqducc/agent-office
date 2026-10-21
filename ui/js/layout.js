@@ -7,7 +7,7 @@ export const ZONES = [
   { id: "manager", name: "Phòng Manager", box: [460, 48, 360, 202], roles: ["manager"], slots: [[640, 168]], door: [640, 250] },
   { id: "strategy", name: "Chiến lược & Sản phẩm", box: [12, 48, 438, 422], roles: ["brainstormer", "business-strategist", "product-manager", "marketing"],
     slots: [[130, 205], [330, 205], [130, 385], [330, 385]], door: [230, 470] },
-  { id: "planning", name: "Kế hoạch & Phản biện", box: [460, 260, 360, 210], roles: ["planner", "critic"], slots: [[570, 400], [710, 400]], door: [640, 470] },
+  { id: "planning", name: "Kế hoạch & Phản biện", box: [460, 260, 360, 210], roles: ["planner", "critic"], slots: [[535, 400], [745, 400]], door: [640, 470] },
   { id: "engineering", name: "Kỹ thuật", box: [830, 48, 438, 422], roles: ["architect", "developer", "ai-engineer", "devops", "ui-ux", "reviewer"],
     slots: [[905, 205], [1049, 205], [1193, 205], [905, 385], [1049, 385], [1193, 385]], door: [1049, 470] },
   { id: "specialists", name: "Chuyên gia", box: [12, 480, 438, 228], roles: [], slots: [[110, 615], [230, 615], [350, 615]], door: [230, 500] },
@@ -75,54 +75,84 @@ export function getRoomBoxes(count) {
   ];
 }
 
+/** Maximum role capacity of a room based on its width and height. */
+export function getRoomCapacity(box) {
+  const [, , rw, rh] = box;
+  if (rw >= 1000) return 14;
+  if (rh >= 350) {
+    if (rw >= 600) return 8;
+    return 6;
+  }
+  // Short rooms (rh < 350)
+  if (rw >= 600) return 5;
+  if (rw >= 400) return 3;
+  return 2;
+}
+
 export function getRoomDeskSlots(box, count) {
   if (count <= 0) return [];
   const [rx, ry, rw, rh] = box;
-  if (count === 1) return [[Math.round(rx + rw / 2), Math.round(ry + rh / 2)]];
+  const minY = Math.round(ry + (rh >= 300 ? 75 : 68));
+  const maxY = Math.round(ry + rh - (rh >= 300 ? 55 : 38));
+  const midX = rx + rw / 2;
+  const maxSpan = Math.max(0, rw - 150);
 
-  const minGap = 140;
-  // If height >= 190 and count >= 3, use 2 rows to keep min-dist >= 140
-  const maxRows = rh >= 190 && count >= 3 ? 2 : 1;
+  if (count === 1) {
+    return [[Math.round(midX), Math.round((minY + maxY) / 2)]];
+  }
 
-  if (maxRows === 1) {
-    const slots = [];
-    const py = Math.round(ry + rh / 2);
-    const span = (count - 1) * Math.max(minGap, Math.min(220, (rw - 120) / (count - 1)));
-    const startX = rx + rw / 2 - span / 2;
-    const step = span / (count - 1);
-    for (let i = 0; i < count; i++) {
-      slots.push([Math.round(startX + i * step), py]);
+  // Determine row count
+  let numRows = 1;
+  if (rh >= 350) {
+    if (count >= 7 || (rw < 500 && count >= 5)) numRows = 3;
+    else if (count >= 3 || (rw < 500 && count >= 2)) numRows = 2;
+  } else {
+    if (count >= 3 || (rw < 500 && count >= 2)) numRows = 2;
+  }
+
+  const rowYs = [];
+  if (numRows === 1) {
+    rowYs.push(Math.round((minY + maxY) / 2));
+  } else if (numRows === 2) {
+    rowYs.push(minY, maxY);
+  } else {
+    rowYs.push(minY, Math.round((minY + maxY) / 2), maxY);
+  }
+
+  const rowCounts = Array(numRows).fill(0);
+  for (let i = 0; i < count; i++) {
+    if (numRows === 2 && count === 3) {
+      if (i === 0) rowCounts[0]++;
+      else rowCounts[1]++;
+    } else if (numRows === 3 && count === 5) {
+      if (i < 2) rowCounts[0]++;
+      else if (i === 2) rowCounts[1]++;
+      else rowCounts[2]++;
+    } else {
+      rowCounts[i % numRows]++;
     }
-    return slots;
   }
 
-  // 2 rows
-  const countR1 = Math.ceil(count / 2);
-  const countR2 = count - countR1;
-  const y1 = rh >= 300 ? Math.round(ry + rh * 0.3) : Math.round(ry + 35);
-  const y2 = rh >= 300 ? Math.round(ry + rh * 0.72) : Math.round(ry + rh - 31);
   const slots = [];
-
-  // Row 1
-  if (countR1 === 1) {
-    slots.push([Math.round(rx + rw / 2), y1]);
-  } else {
-    const span1 = (countR1 - 1) * Math.max(minGap, Math.min(240, (rw - 120) / (countR1 - 1)));
-    const startX1 = rx + rw / 2 - span1 / 2;
-    const step1 = span1 / (countR1 - 1);
-    for (let i = 0; i < countR1; i++) slots.push([Math.round(startX1 + i * step1), y1]);
+  for (let r = 0; r < numRows; r++) {
+    const k = rowCounts[r];
+    const py = rowYs[r];
+    if (k === 1) {
+      slots.push([Math.round(midX), py]);
+    } else if (k > 1) {
+      const maxStep = 240;
+      const step = Math.min(maxStep, maxSpan / (k - 1));
+      const span = (k - 1) * step;
+      let startX = midX - span / 2;
+      if (numRows === 2 && rowCounts[0] === 2 && rowCounts[1] === 2 && rw >= 550) {
+        if (r === 0) startX = rx + 75 + (maxSpan - span) * 0.2;
+        else startX = rx + 75 + (maxSpan - span) * 0.8;
+      }
+      for (let i = 0; i < k; i++) {
+        slots.push([Math.round(startX + i * step), py]);
+      }
+    }
   }
-
-  // Row 2
-  if (countR2 === 1) {
-    slots.push([Math.round(rx + rw / 2), y2]);
-  } else {
-    const span2 = (countR2 - 1) * Math.max(minGap, Math.min(240, (rw - 120) / (countR2 - 1)));
-    const startX2 = rx + rw / 2 - span2 / 2;
-    const step2 = span2 / (countR2 - 1);
-    for (let i = 0; i < countR2; i++) slots.push([Math.round(startX2 + i * step2), y2]);
-  }
-
   return slots;
 }
 
@@ -212,6 +242,25 @@ export function findWalkPath(fromRole, toRole, desks, rooms) {
     return [start, end];
   }
 
+  // Special direct connection between manager and planning in default zones
+  if (!rooms || !rooms.length) {
+    if ((deskA.zone === "manager" && deskB.zone === "planning") || (deskA.zone === "planning" && deskB.zone === "manager")) {
+      const isFromManager = deskA.zone === "manager";
+      const planningDesk = isFromManager ? end : start;
+      const raw = isFromManager
+        ? [start, { x: 640, y: 168 }, { x: 640, y: 250 }, { x: 640, y: planningDesk.y }, end]
+        : [start, { x: 640, y: planningDesk.y }, { x: 640, y: 250 }, { x: 640, y: 168 }, end];
+      const points = [];
+      for (const pt of raw) {
+        const last = points.at(-1);
+        if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 2) {
+          points.push({ x: Math.round(pt.x), y: Math.round(pt.y) });
+        }
+      }
+      return points;
+    }
+  }
+
   const doors = getRoomDoors(rooms);
   const getDoor = zone => {
     if (zone === "entrance") return { x: ENTRANCE.x, y: 560 };
@@ -223,6 +272,12 @@ export function findWalkPath(fromRole, toRole, desks, rooms) {
   const doorB = getDoor(deskB.zone);
 
   const raw = [start];
+
+  // Route via aisle if originating from planning
+  if ((!rooms || !rooms.length) && deskA.zone === "planning") {
+    raw.push({ x: 640, y: start.y });
+  }
+
   raw.push({ x: doorA.x, y: doorA.y });
 
   const corridorA = doorA.y <= 260 ? 254 : (doorA.y >= 540 ? 560 : 490);
@@ -239,6 +294,12 @@ export function findWalkPath(fromRole, toRole, desks, rooms) {
   }
 
   if (corridorB !== doorB.y) raw.push({ x: doorB.x, y: doorB.y });
+
+  // Route via aisle if destination is planning
+  if ((!rooms || !rooms.length) && deskB.zone === "planning") {
+    raw.push({ x: 640, y: end.y });
+  }
+
   raw.push(end);
 
   const points = [];

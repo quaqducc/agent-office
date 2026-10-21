@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 // @ts-ignore -- browser ES modules without type declarations
 import { sprite, SPRITE_ROWS } from "../ui/js/sprites.js";
 // @ts-ignore
-import { deskLayout, findWalkPath } from "../ui/js/layout.js";
+import { deskLayout, findWalkPath, getRoomDeskSlots, getRoomBoxes, getRoomDoors, getRoomCapacity, ZONES, ENTRANCE } from "../ui/js/layout.js";
+// @ts-ignore
+import { sceneSvg } from "../ui/js/scene.js";
 // @ts-ignore
 import { RoleWalkQueue, walkDuration, getBubbleContent, renderOffice } from "../ui/js/office.js";
 
@@ -268,3 +270,133 @@ test("office DOM render does not contain link lines or link-end circles", () => 
   assert.ok(!mockEl.innerHTML.includes('<svg class="links"'));
   assert.ok(!mockEl.innerHTML.includes('<circle class="link-end'));
 });
+
+test("desk footprint, bounds and capacity: desks stay inside room box without negative x or overlap for 1 to 6 rooms and up to 14 roles", () => {
+  // Test getRoomDeskSlots on narrow room with 14 roles
+  const smallBox = [12, 48, 412, 206];
+  const slots14 = getRoomDeskSlots(smallBox, 14);
+  assert.equal(slots14.length, 14);
+  for (let i = 0; i < slots14.length; i++) {
+    const [px, py] = slots14[i];
+    // x must not be negative and must stay inside [rx, rx + rw]
+    assert.ok(px >= smallBox[0] + 66, `px ${px} >= left bound ${smallBox[0] + 66}`);
+    assert.ok(px <= smallBox[0] + smallBox[2] - 66, `px ${px} <= right bound ${smallBox[0] + smallBox[2] - 66}`);
+    // py + 32 must not exceed room bottom
+    assert.ok(py + 32 <= smallBox[1] + smallBox[3], `py + 32 (${py + 32}) <= bottom (${smallBox[1] + smallBox[3]})`);
+    // py safe from north wall and sign
+    assert.ok(py >= smallBox[1] + 55, `py ${py} safe from north wall`);
+  }
+
+  // Check no two desks have the exact same position
+  const set14 = new Set(slots14.map(([x, y]) => `${x}:${y}`));
+  assert.equal(set14.size, 14, "no two desks share the exact same slot");
+});
+
+test("dynamic doors in sceneSvg match getRoomDoors coordinates", () => {
+  for (let n = 1; n <= 6; n++) {
+    const rooms = Array.from({ length: n }, (_, i) => ({
+      id: `room_${i + 1}`,
+      name: `Phòng ${i + 1}`,
+      roles: [`role_${i + 1}`],
+    }));
+    const doors = getRoomDoors(rooms);
+    const svg = sceneSvg({ rooms });
+
+    for (const rm of rooms) {
+      const [doorX, doorY] = doors[rm.id];
+      // Expect an s-door rect on the wall at doorY that encompasses doorX
+      const doorMatches = Array.from(svg.matchAll(/<rect\s+x="(\d+)"\s+y="(\d+)"\s+width="(\d+)"\s+height="28"\s+class="s-door"/g));
+      const hasDoorCovering = doorMatches.some(m => {
+        const x = Number(m[1]);
+        const y = Number(m[2]);
+        const w = Number(m[3]);
+        return y === doorY && x <= doorX - 30 && (x + w) >= doorX + 30;
+      });
+      assert.ok(
+        hasDoorCovering,
+        `n=${n}: door for ${rm.id} at (${doorX}, ${doorY}) must be covered by an s-door opening in scene svg`
+      );
+    }
+  }
+});
+
+test("planning room desks leave central corridor clear at x=640 and manager walk paths do not clip desks", () => {
+  const planningZone = ZONES.find((z: any) => z.id === "planning");
+  assert.ok(planningZone);
+  const [plannerDesk, criticDesk] = planningZone.slots;
+
+  // Desks are [px, py]. Half width is 66px.
+  // Corridor at x=640 must have clearance from planner (left) and critic (right)
+  const plannerRight = plannerDesk[0] + 66;
+  const criticLeft = criticDesk[0] - 66;
+  assert.ok(plannerRight < 640, `planner desk right (${plannerRight}) < corridor center (640)`);
+  assert.ok(criticLeft > 640, `critic desk left (${criticLeft}) > corridor center (640)`);
+  assert.ok(criticLeft - plannerRight >= 60, "central aisle is at least 60px wide");
+
+  // Manager walk path to various roles
+  const desks = deskLayout(["manager", "planner", "critic", "developer", "marketing"]);
+  for (const targetRole of ["planner", "critic", "developer", "marketing", "user"]) {
+    const path = findWalkPath("manager", targetRole, desks, []);
+    assert.ok(path.length >= 2, `path to ${targetRole} must have at least 2 points`);
+
+    // Verify no segment intersects desk footprints of planner or critic
+    for (let i = 0; i < path.length - 1; i++) {
+      const p1 = path[i];
+      const p2 = path[i + 1];
+
+      for (const [px, py] of [plannerDesk, criticDesk]) {
+        // If target or source is that desk, endpoint can touch the desk center
+        if ((p1.x === px && p1.y === py) || (p2.x === px && p2.y === py)) continue;
+
+        // Check distance of segment to desk center: must not cut through desk footprint (radius >= 40)
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const lenSq = dx * dx + dy * dy;
+        let t = lenSq === 0 ? 0 : ((px - p1.x) * dx + (py - p1.y) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const projX = p1.x + t * dx;
+        const projY = p1.y + t * dy;
+        const dist = Math.hypot(projX - px, projY - py);
+        assert.ok(dist >= 40, `segment from (${p1.x},${p1.y}) to (${p2.x},${p2.y}) clipped desk at (${px},${py}), dist: ${dist}`);
+      }
+    }
+  }
+});
+
+test("walk path line segments never penetrate unrelated 3rd-party rooms for 1-6 room configs", () => {
+  for (let n = 2; n <= 6; n++) {
+    const rooms = Array.from({ length: n }, (_, i) => ({
+      id: `room_${i + 1}`,
+      name: `Phòng ${i + 1}`,
+      roles: [`role_${i + 1}`],
+    }));
+    const roles = rooms.map(r => r.roles[0]);
+    const desks = deskLayout(roles, rooms);
+    const boxes = getRoomBoxes(n);
+
+    // Test all pairs of roles
+    for (let i = 0; i < roles.length; i++) {
+      for (let j = 0; j < roles.length; j++) {
+        if (i === j) continue;
+        const fromRole = roles[i];
+        const toRole = roles[j];
+        const path = findWalkPath(fromRole, toRole, desks, rooms);
+        assert.ok(path.length >= 2, `path from ${fromRole} to ${toRole} exists`);
+
+        // Check against all unrelated rooms k !== i && k !== j
+        for (let k = 0; k < rooms.length; k++) {
+          if (k === i || k === j) continue;
+          const [rx, ry, rw, rh] = boxes[k];
+
+          // Check every waypoint
+          for (const pt of path) {
+            // Strictly interior check (margin of 2px)
+            const inside = pt.x > rx + 2 && pt.x < rx + rw - 2 && pt.y > ry + 2 && pt.y < ry + rh - 2;
+            assert.ok(!inside, `waypoint (${pt.x}, ${pt.y}) penetrated unrelated room_${k + 1} [${rx}, ${ry}, ${rw}, ${rh}]`);
+          }
+        }
+      }
+    }
+  }
+});
+

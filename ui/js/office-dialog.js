@@ -1,7 +1,7 @@
 // Office customization dialog: templates, dynamic rooms, and role room assignments.
 import { api } from "./api.js";
 import { icon } from "./icons.js";
-import { ZONES } from "./layout.js";
+import { getRoomBoxes, getRoomCapacity, ZONES } from "./layout.js";
 import { sprite } from "./sprites.js";
 import { esc } from "./util.js";
 
@@ -119,6 +119,8 @@ export async function openOfficeDialog(ctx) {
 
     // Check for uninstalled roles in active selection
     const missingRoles = Array.from(activeRoles).filter(r => !installedIds.has(r));
+    const boxes = getRoomBoxes(rooms.length);
+    const hasOverCap = rooms.some((rm, idx) => rm.roles.length > getRoomCapacity(boxes[idx]));
 
     // Collect all candidate roles: installed roles + template roles + active roles
     const allRoleIds = Array.from(new Set([
@@ -152,6 +154,13 @@ export async function openOfficeDialog(ctx) {
               </div>
             `).join("")}
           </div>
+        </div>
+      ` : ""}
+
+      ${hasOverCap ? `
+        <div class="banner warn" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          ${icon("alert")}
+          <span><strong>Cảnh báo sức chứa:</strong> Một số phòng vượt quá sức chứa tối đa. Vui lòng chuyển bớt vai trò sang phòng khác trước khi lưu.</span>
         </div>
       ` : ""}
 
@@ -202,11 +211,16 @@ export async function openOfficeDialog(ctx) {
           </button>
         </div>
         <div class="office-rooms-list">
-          ${rooms.map((rm, idx) => `
+          ${rooms.map((rm, idx) => {
+            const cap = getRoomCapacity(boxes[idx]);
+            const isOver = rm.roles.length > cap;
+            const isFull = rm.roles.length === cap;
+            return `
             <div class="office-room-row" data-room-idx="${idx}">
               <div class="room-title-col">
                 <span class="room-num">${idx + 1}.</span>
                 <input type="text" class="input room-name-input" data-room-idx="${idx}" value="${esc(rm.name)}" placeholder="Tên phòng" />
+                <span class="tag small ${isOver ? "danger" : isFull ? "warn" : "muted"}" title="Sức chứa tối đa: ${cap} vai trò">${rm.roles.length}/${cap}</span>
               </div>
               <div class="room-roles-summary">
                 ${rm.roles.map(r => `
@@ -218,7 +232,7 @@ export async function openOfficeDialog(ctx) {
                 ${icon("trash")}
               </button>
             </div>
-          `).join("")}
+          `;}).join("")}
         </div>
       </section>
 
@@ -248,9 +262,16 @@ export async function openOfficeDialog(ctx) {
                     </button>
                   ` : isEnabled ? `
                     <select class="input select-room" data-role="${esc(roleId)}">
-                      ${rooms.map((rm, idx) => `
-                        <option value="${idx}" ${idx === currentRoomIdx ? "selected" : ""}>Phòng: ${esc(rm.name)}</option>
-                      `).join("")}
+                      ${rooms.map((rm, idx) => {
+                        const cap = getRoomCapacity(boxes[idx]);
+                        const isCurrent = idx === currentRoomIdx;
+                        const isFull = !isCurrent && rm.roles.length >= cap;
+                        return `
+                          <option value="${idx}" ${isCurrent ? "selected" : ""} ${isFull ? "disabled" : ""}>
+                            Phòng: ${esc(rm.name)} (${rm.roles.length}/${cap}${isFull ? " - Đầy" : ""})
+                          </option>
+                        `;
+                      }).join("")}
                     </select>
                   ` : `<span class="muted text-sm">Không hoạt động</span>`}
                 </div>
@@ -340,7 +361,11 @@ export async function openOfficeDialog(ctx) {
         if (roleId === "manager") return;
         if (e.target.checked) {
           activeRoles.add(roleId);
-          if (rooms[0] && !rooms[0].roles.includes(roleId)) rooms[0].roles.push(roleId);
+          if (!rooms.some(rm => rm.roles.includes(roleId))) {
+            const availIdx = rooms.findIndex((rm, idx) => rm.roles.length < getRoomCapacity(boxes[idx]));
+            if (availIdx !== -1) rooms[availIdx].roles.push(roleId);
+            else if (rooms[0]) rooms[0].roles.push(roleId);
+          }
         } else {
           activeRoles.delete(roleId);
           for (const rm of rooms) rm.roles = rm.roles.filter(r => r !== roleId);
@@ -355,6 +380,13 @@ export async function openOfficeDialog(ctx) {
         selectedTemplate = null;
         const roleId = e.target.dataset.role;
         const newRoomIdx = Number(e.target.value);
+        const targetCap = getRoomCapacity(boxes[newRoomIdx]);
+        const otherRolesInRoom = rooms[newRoomIdx]?.roles.filter(r => r !== roleId).length ?? 0;
+        if (otherRolesInRoom >= targetCap) {
+          ctx.toast(`Phòng "${rooms[newRoomIdx]?.name}" đã đầy sức chứa (${targetCap} vai trò)`, "warn");
+          render();
+          return;
+        }
         for (const rm of rooms) rm.roles = rm.roles.filter(r => r !== roleId);
         if (rooms[newRoomIdx]) rooms[newRoomIdx].roles.push(roleId);
         render();
@@ -385,6 +417,10 @@ export async function openOfficeDialog(ctx) {
 
     // Save configuration
     d.querySelector('[data-act="save"]')?.addEventListener("click", async () => {
+      if (hasOverCap) {
+        ctx.toast("Vui lòng phân bổ lại vai trò để các phòng không vượt quá sức chứa tối đa.", "warn");
+        return;
+      }
       ensureRoleAssignments();
       activeRoles.add("manager");
       const rolesArray = Array.from(activeRoles);
