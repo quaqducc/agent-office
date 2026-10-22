@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventLog } from "../../src/event-log.ts";
-import { Router, type RunnerFactory, type RunnerHooks } from "../../src/router.ts";
+import { Router, type RunnerFactory, type RunnerHooks, type QueueAdapter } from "../../src/router.ts";
 import { DEFAULT_LIMITS } from "../../src/config.ts";
 import type { Limits } from "../../src/types.ts";
 
@@ -25,7 +25,7 @@ export function fakeFactory(script: Script): RunnerFactory {
 
 export const ROLES = ["manager", "brainstormer", "critic", "developer", "reviewer", "architect", "planner", "product-manager"];
 
-export function makeRouter(script: Script, limits: Partial<Limits> = {}, extra: { now?: () => number } = {}) {
+export function makeRouter(script: Script, limits: Partial<Limits> = {}, extra: { now?: () => number; queueAdapter?: QueueAdapter } = {}) {
   const log = new EventLog(mkdtempSync(join(tmpdir(), "router-")), "ws");
   const router = new Router({
     workspaceId: "ws", roles: ROLES, limits: { ...DEFAULT_LIMITS, ...limits }, log,

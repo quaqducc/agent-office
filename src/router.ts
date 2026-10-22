@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { compileTrail, type EventLog } from "./event-log.ts";
 import type { CheckpointArgs, HandoffArgs, Limits, Task, TaskStatus, TeamEventType, Trail } from "./types.ts";
+import type { QueuedMessage } from "./workspace.ts";
+
+export interface QueueAdapter {
+  getQueue: () => QueuedMessage[];
+  enqueue: (text: string) => { item: QueuedMessage; position: number };
+  dequeue: () => QueuedMessage | undefined;
+  remove: (id: string) => boolean;
+}
 
 export interface RoleRunner {
   /** Runs one prompt to completion; resolves with the final assistant text. */
@@ -24,6 +32,7 @@ export interface RouterOptions {
   createRunner: RunnerFactory;
   onRunFinished?: (runId: string, status: string, usage: { tokens: number }) => void;
   now?: () => number;
+  queueAdapter?: QueueAdapter;
 }
 
 interface WorkItem {
@@ -85,6 +94,7 @@ export class Router {
   private decisions = new Map<string, { runId: string; role: string; title: string; reminded: boolean; resolve: (answer: string) => void }>();
   private approvals = new Map<string, PendingApproval & { resolve: (answer: string) => void }>();
   private lastCheckpointSeq = new Map<string, number>();
+  private draining = false;
 
   constructor(o: RouterOptions) {
     this.o = o;
@@ -102,13 +112,7 @@ export class Router {
 
   // ---------- user entry ----------
 
-  sendUserMessage(text: string): { runId: string } {
-    if (this.active) {
-      const runId = this.active;
-      this.emit(runId, "user_message", { text }, undefined, "user");
-      this.enqueue(MANAGER, { runId, text: `User: ${text}` });
-      return { runId };
-    }
+  private startRun(text: string): string {
     const runId = randomUUID();
     const root = this.newTask(runId, { from: "user", to: MANAGER, goal: text, inputs: "", expectedOutput: "", depth: 0 });
     this.runs.set(runId, { id: runId, status: "active", rootTaskId: root.id, tokens: 0, pairRounds: new Map(), firstMessage: text });
@@ -117,6 +121,35 @@ export class Router {
     this.emit(runId, "user_message", { text }, root.id, "user");
     this.emitTaskCreated(root, undefined);
     this.enqueue(MANAGER, { runId, taskId: root.id, text: `User: ${text}` });
+    return runId;
+  }
+
+  drainQueue(): void {
+    if (this.active || this.draining) return;
+    if (!this.o.queueAdapter) return;
+    this.draining = true;
+    try {
+      const next = this.o.queueAdapter.dequeue();
+      if (next) {
+        this.startRun(next.text);
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  sendUserMessage(text: string): { runId: string; queued?: boolean; position?: number; id?: string } {
+    if (this.active || this.draining) {
+      if (this.o.queueAdapter) {
+        const { item, position } = this.o.queueAdapter.enqueue(text);
+        return { runId: "", queued: true, position, id: item.id };
+      }
+      const runId = this.active!;
+      this.emit(runId, "user_message", { text }, undefined, "user");
+      this.enqueue(MANAGER, { runId, text: `User: ${text}` });
+      return { runId };
+    }
+    const runId = this.startRun(text);
     return { runId };
   }
 
@@ -491,7 +524,10 @@ export class Router {
     this.emit(run.id, "run_finished", { status: run.status, usage: { tokens: run.tokens } });
     if (this.active === run.id) this.active = undefined;
     this.o.onRunFinished?.(run.id, run.status, { tokens: run.tokens });
-    for (const w of this.idleWaiters.splice(0)) w();
+    this.drainQueue();
+    if (!this.active) {
+      for (const w of this.idleWaiters.splice(0)) w();
+    }
   }
 }
 

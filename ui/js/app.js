@@ -18,6 +18,7 @@ const el = {
   office: $("#office"), stage: $("#stage"), onboard: $("#onboard"), chat: $("#chat"), flow: $("#flow"), log: $("#log"),
   flowQuestion: $("#flow-question"), logQuestion: $("#log-question"),
   approvals: $("#approvals"), feed: $("#feed"), now: $("#now-body"),
+  queueBanner: $("#queue-banner"),
   wsBtn: $("#ws-btn"), wsPop: $("#ws-pop"), wsName: $("#ws-name"), runBtn: $("#run-btn"), runPop: $("#run-pop"), runName: $("#run-name"),
   stop: $("#stop-run"), conn: $("#conn"), replay: $("#replay-controls"), replayToggle: $("#replay-toggle"), replayBar: $("#replay-bar"),
   logRole: $("#log-role"), logType: $("#log-type"), logCount: $("#log-count"), flowCount: $("#flow-count"),
@@ -48,6 +49,7 @@ const app = {
   tab: "chat",
   logType: "",
   version: "",
+  queue: [],
   selectedQuestionId: "current",
   cachedRunEvents: new Map(),
   cachedRunStates: new Map(),
@@ -146,9 +148,18 @@ function draw() {
   for (const fx of s.effects.slice(app.fxDone[key])) playEffect(el.office, fx, speed);
   app.fxDone[key] = s.effects.length;
 
-  renderNow(el.now, s, { names: app.names, replay: readOnly, noWorkspace: !app.wsId });
+  renderNow(el.now, s, { names: app.names, replay: readOnly, noWorkspace: !app.wsId, queueCount: app.queue.length });
   renderFeed(el.feed, s, { names: app.names });
-  renderChat(el.chat, s, { names: app.names, md, readOnly });
+  renderChat(el.chat, s, { names: app.names, md, readOnly, queue: app.queue });
+
+  if (el.queueBanner) {
+    if (!readOnly && app.queue.length > 0) {
+      el.queueBanner.hidden = false;
+      el.queueBanner.innerHTML = `${icon("tasks")} <b>${app.queue.length}</b> tin nhắn đang chờ xử lý tuần tự`;
+    } else {
+      el.queueBanner.hidden = true;
+    }
+  }
 
   // Question selector derivation & data slicing for Flow and Log panels
   const questions = extractQuestions({
@@ -332,6 +343,7 @@ async function openWorkspace(id) {
   app.selectedQuestionId = "current";
   app.cachedRunEvents.clear();
   app.cachedRunStates.clear();
+  app.queue = [];
   localStorageSet("ws", id);
   renderWorkspaceMenu();
   const cfg = await api.config(id);
@@ -354,6 +366,7 @@ async function openWorkspace(id) {
     if (st === "open" && app.sseLost) openWorkspace(id).catch(e => toast(e.message, "bad"));
   });
   const runs = await refreshRuns();
+  await refreshQueue();
   if (gen !== app.gen) return;
   // Show the latest run (live or finished) as the starting picture, without replaying its animations.
   const latest = runs[0];
@@ -405,10 +418,25 @@ async function refreshRuns() {
   return app.runs;
 }
 
+async function refreshQueue() {
+  if (!app.wsId) { app.queue = []; return []; }
+  try {
+    app.queue = await api.queue(app.wsId);
+    render();
+    return app.queue;
+  } catch {
+    app.queue = [];
+    return [];
+  }
+}
+
 function onLiveEvent(e) {
   if (!app.liveReady) { app.buffer.push(e); return; }
   app.live = reduce(app.live, e);
-  if (e.type === "run_started" || e.type === "run_finished") refreshRuns().catch(() => {});
+  if (e.type === "run_started" || e.type === "run_finished") {
+    refreshRuns().catch(() => {});
+    refreshQueue().catch(() => {});
+  }
   if (e.type === "approval_request" && app.mode === "replay") toast("Có yêu cầu cần bạn duyệt — bấm “Về trực tiếp” để xem");
   if (app.mode === "live") render();
 }
@@ -608,7 +636,15 @@ el.form.addEventListener("submit", async ev => {
   if (!text || !app.wsId || app.mode !== "live") return;
   el.input.value = "";
   grow();
-  try { await api.send(app.wsId, text); } catch (e) { toast(`Không gửi được: ${e.message}`, "bad"); el.input.value = text; grow(); }
+  try {
+    const res = await api.send(app.wsId, text);
+    if (res?.queued) toast(`Đã thêm vào hàng đợi (vị trí #${res.position})`);
+    await refreshQueue();
+  } catch (e) {
+    toast(`Không gửi được: ${e.message}`, "bad");
+    el.input.value = text;
+    grow();
+  }
 });
 function grow() { el.input.style.height = "auto"; el.input.style.height = `${Math.min(el.input.scrollHeight, 180)}px`; }
 el.input.addEventListener("input", grow);
@@ -622,6 +658,15 @@ document.addEventListener("click", ev => {
   if (t.dataset.act === "add-ws") addWorkspace();
   else if (t.dataset.act === "rename-ws") renameWorkspace();
   else if (t.dataset.act === "hide-approvals") el.approvals.classList.add("min");
+  else if (t.dataset.act === "cancel-queue") {
+    const qid = t.dataset.qid;
+    if (qid && app.wsId) {
+      api.deleteQueueItem(app.wsId, qid).then(() => {
+        toast("Đã bỏ tin nhắn khỏi hàng đợi");
+        return refreshQueue();
+      }).catch(e => toast(`Không thể bỏ tin: ${e.message}`, "bad"));
+    }
+  }
   else if (t.dataset.act === "show-approvals") {
     el.approvals.classList.remove("min");
     const card = el.approvals.querySelector(".approval");

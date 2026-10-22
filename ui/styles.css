@@ -568,6 +568,14 @@ h1, h2, h3 { margin: 0; }
 .chat { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .msg.user { align-self: flex-end; max-width: 88%; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .bubble-u { background: var(--accent); color: var(--accent-ink); padding: 9px 14px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.user.pending .bubble-u { background: var(--panel-2); color: var(--ink); border: 1px dashed var(--accent); }
+.queue-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.queue-badge { display: inline-block; font-size: 11px; font-weight: 700; background: var(--accent-soft); color: var(--accent-text); padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.queue-text { flex: 1 1 auto; min-width: 0; }
+.btn-cancel-queue { background: transparent; border: 1px solid var(--line); color: var(--muted); font-size: 11.5px; padding: 2px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.btn-cancel-queue:hover { border-color: var(--bad); color: var(--bad); background: var(--panel-3); }
+.queue-banner { padding: 8px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line-2); font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.queue-banner b { color: var(--accent-text); }
 .msg time { font-size: 11.5px; color: var(--muted); }
 .msg.manager { display: flex; gap: 10px; align-items: flex-start; max-width: 100%; }
 .msg-body { min-width: 0; flex: 1; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 4px 16px 16px 16px; padding: 9px 14px; }

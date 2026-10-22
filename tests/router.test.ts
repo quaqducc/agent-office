@@ -230,3 +230,59 @@ test("manager handoffs made while handling a notice hang under the run's root ta
   assert.equal(critic.parentTaskId, root.id);
   assert.equal(critic.depth, 1);
 });
+
+test("router queues message when run is active and drains sequentially", async () => {
+  const queue: { id: string; text: string; createdAt: string }[] = [];
+  let unblockFirst: (() => void) | undefined;
+  const executed: string[] = [];
+
+  const { router } = makeRouter(async (role, text) => {
+    if (role === "manager" && text.startsWith("User: ")) {
+      const msg = text.replace("User: ", "").trim();
+      executed.push(msg);
+      if (msg === "first") {
+        await new Promise<void>(resolve => { unblockFirst = resolve; });
+      }
+    }
+    return "ok";
+  }, undefined, {
+    queueAdapter: {
+      getQueue: () => [...queue],
+      enqueue: (text: string) => {
+        const item = { id: `q-${queue.length + 1}`, text, createdAt: new Date().toISOString() };
+        queue.push(item);
+        return { item, position: queue.length };
+      },
+      dequeue: () => queue.shift(),
+      remove: (id: string) => {
+        const idx = queue.findIndex(q => q.id === id);
+        if (idx >= 0) { queue.splice(idx, 1); return true; }
+        return false;
+      },
+    },
+  });
+
+  const res1 = router.sendUserMessage("first");
+  assert.ok(res1.runId);
+  assert.equal(res1.queued, undefined);
+
+  const res2 = router.sendUserMessage("second");
+  assert.equal(res2.queued, true);
+  assert.equal(res2.position, 1);
+  assert.equal(res2.id, "q-1");
+
+  const res3 = router.sendUserMessage("third");
+  assert.equal(res3.queued, true);
+  assert.equal(res3.position, 2);
+  assert.equal(res3.id, "q-2");
+
+  await sleep(10);
+  assert.deepEqual(executed, ["first"]);
+  unblockFirst?.();
+
+  await idleWithin(router);
+  assert.deepEqual(executed, ["first", "second", "third"]);
+  assert.equal(queue.length, 0);
+  assert.equal(router.activeRunId(), undefined);
+});
+

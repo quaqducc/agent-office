@@ -212,4 +212,53 @@ test("saveConfig strictly validates rooms, names, ids and counts", () => {
   );
 });
 
+test("workspace queue: persistence, enqueue, dequeue, removeQueueItem", () => {
+  const store = new WorkspaceStore(tmp("data-"));
+  const ws = store.add(tmp("proj-"));
+
+  assert.deepEqual(store.getQueue(ws), []);
+
+  const q1 = store.enqueue(ws, "first message");
+  assert.equal(q1.position, 1);
+  assert.equal(q1.item.text, "first message");
+  assert.ok(q1.item.id);
+
+  const q2 = store.enqueue(ws, "second message");
+  assert.equal(q2.position, 2);
+
+  const q3 = store.enqueue(ws, "third message");
+  assert.equal(q3.position, 3);
+
+  // Persistence across store re-instantiation
+  const store2 = new WorkspaceStore(store.dataDir);
+  const queueLoaded = store2.getQueue(ws);
+  assert.equal(queueLoaded.length, 3);
+  assert.equal(queueLoaded[0].id, q1.item.id);
+  assert.equal(queueLoaded[1].id, q2.item.id);
+  assert.equal(queueLoaded[2].id, q3.item.id);
+
+  // Remove middle item
+  const removed = store2.removeQueueItem(ws, q2.item.id);
+  assert.equal(removed, true);
+  assert.equal(store2.removeQueueItem(ws, "non-existent"), false);
+
+  const afterRemove = store2.getQueue(ws);
+  assert.equal(afterRemove.length, 2);
+  assert.equal(afterRemove[0].id, q1.item.id);
+  assert.equal(afterRemove[1].id, q3.item.id);
+
+  // Dequeue in FIFO order
+  const dequeued1 = store2.dequeue(ws);
+  assert.equal(dequeued1?.id, q1.item.id);
+  assert.equal(store2.getQueue(ws).length, 1);
+
+  const dequeued2 = store2.dequeue(ws);
+  assert.equal(dequeued2?.id, q3.item.id);
+  assert.equal(store2.getQueue(ws).length, 0);
+
+  const dequeuedEmpty = store2.dequeue(ws);
+  assert.equal(dequeuedEmpty, undefined);
+});
+
+
 

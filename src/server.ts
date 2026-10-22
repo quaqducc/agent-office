@@ -63,6 +63,13 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   const store = new WorkspaceStore(o.dataDir ?? appHome());
   // Runs left "active" by a crash or kill can never finish: mark them interrupted.
   for (const ws of store.list()) for (const r of store.runs(ws)) if (r.status === "active") store.appendRun(ws, { ...r, status: "interrupted" });
+  for (const ws of store.list()) {
+    if (store.getQueue(ws).length > 0) {
+      queueMicrotask(() => {
+        try { ctxFor(ws.id); } catch {}
+      });
+    }
+  }
   let port = 0;
   const ctxs = new Map<string, Ctx>();
   const sse = new Set<{ res: ServerResponse; workspaceId?: string }>();
@@ -81,8 +88,14 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     const getRouter = () => router;
     const createRunner = o.createRunner?.(ws, getRouter) ?? createPiRunnerFactory({ workspacePath: ws.path, router: getRouter });
     const started = new Map<string, { startedAt: string; firstMessage: string }>();
+    const queueAdapter = {
+      getQueue: () => store.getQueue(ws),
+      enqueue: (text: string) => store.enqueue(ws, text),
+      dequeue: () => store.dequeue(ws),
+      remove: (qid: string) => store.removeQueueItem(ws, qid),
+    };
     router = new Router({
-      workspaceId: ws.id, roles: cfg.roles, limits: cfg.limits, log, createRunner,
+      workspaceId: ws.id, roles: cfg.roles, limits: cfg.limits, log, createRunner, queueAdapter,
       onRunFinished: (runId, status, usage) => {
         const s = started.get(runId);
         store.appendRun(ws, { runId, startedAt: s?.startedAt ?? "", endedAt: new Date().toISOString(), status, firstMessage: s?.firstMessage ?? "", tokens: usage.tokens });
@@ -99,6 +112,7 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     });
     const ctx = { ws, log, router, sig };
     ctxs.set(id, ctx);
+    queueMicrotask(() => router.drainQueue());
     return ctx;
   }
 
@@ -286,10 +300,19 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       if (m === "GET" && parts[2] === "runs") return json(200, store.runs(ctx.ws));
       if (m === "GET" && parts[2] === "config") return json(200, store.config(ctx.ws));
       if (m === "GET" && parts[2] === "approvals") return json(200, ctx.router.pendingApprovals());
+      if (m === "GET" && parts[2] === "queue") return json(200, store.getQueue(ctx.ws));
+      if (m === "DELETE" && parts[2] === "queue" && parts[3]) {
+        const qid = parts[3];
+        const removed = store.removeQueueItem(ctx.ws, qid);
+        if (!removed) throw new HttpError(404, `queued message ${qid} not found`);
+        return json(200, { deleted: qid });
+      }
       if (m === "POST" && parts[2] === "messages") {
         const b = await body(req);
         if (typeof b.text !== "string" || !b.text.trim()) throw new HttpError(400, "text is required");
-        return json(200, ctx.router.sendUserMessage(b.text));
+        const res = ctx.router.sendUserMessage(b.text);
+        if (res.queued) return json(200, { queued: true, position: res.position, id: res.id });
+        return json(200, { runId: res.runId });
       }
     }
     if (parts[0] === "runs" && parts[1]) {

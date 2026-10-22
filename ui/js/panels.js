@@ -16,7 +16,7 @@ const ROLE_VI = { working: "Đang làm", waiting: "Đang chờ", approval: "Ch�
 const GROUP_VI = { task: "Việc", message: "Tin nhắn", tool: "Công cụ", approval: "Duyệt", error: "Lỗi", system: "Hệ thống" };
 
 /** The "now" strip: run status, elapsed, tokens, task counts, who waits on whom, pending approvals. */
-export function renderNow(el, state, { names, replay, noWorkspace }) {
+export function renderNow(el, state, { names, replay, noWorkspace, queueCount = 0 }) {
   if (!state.runId && !replay) {
     el.innerHTML = `<span class="run-pill st-idle">Chưa có lần chạy</span><span class="now-hint">${noWorkspace
       ? "Thêm một workspace để bắt đầu."
@@ -36,11 +36,14 @@ export function renderNow(el, state, { names, replay, noWorkspace }) {
       : "";
   const appr = !replay && o.approvals
     ? `<button class="approval-alert" type="button" data-act="show-approvals">${icon("alert")}${o.approvals} việc cần bạn duyệt</button>` : "";
+  const qStat = !replay && queueCount > 0
+    ? `<span class="stat" title="Hàng đợi">${icon("tasks")}<b>${queueCount}</b> tin đang chờ</span>`
+    : "";
   el.innerHTML = `${pill}
     <span class="stat" title="Thời gian chạy">${icon("clock")}<b>${duration(o.elapsedMs)}</b></span>
     <span class="stat" title="Token đã dùng">${icon("zap")}<b>${state.tokens.toLocaleString("vi-VN")}</b> token</span>
     <span class="stat" title="Các việc trong lần chạy">${icon("tasks")}<b>${o.running}</b> đang làm<span class="sep"></span><b>${o.queued}</b> chờ<span class="sep"></span><b>${o.done}</b> xong${o.failed ? `<span class="sep"></span><b class="bad">${o.failed}</b> lỗi` : ""}</span>
-    ${waits}${appr}`;
+    ${qStat}${waits}${appr}`;
 }
 
 /** Render <option> list for the question selector and sync selected state. */
@@ -94,11 +97,12 @@ const SUGGESTIONS = [
 ];
 
 /** @param {(md:string)=>string} md safe Markdown → HTML */
-export function renderChat(el, state, { names, md, readOnly }) {
-  const sig = `${state.runId}:${state.chat.length}:${readOnly}`;
+export function renderChat(el, state, { names, md, readOnly, queue = [] }) {
+  const qSig = queue.map(q => q.id).join(",");
+  const sig = `${state.runId}:${state.chat.length}:${readOnly}:${qSig}`;
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
-  if (!state.chat.length) {
+  if (!state.chat.length && !queue.length) {
     el.innerHTML = readOnly
       ? `<div class="empty"><p>Lần chạy này chưa có tin nhắn.</p></div>`
       : `<div class="empty">
@@ -109,9 +113,26 @@ export function renderChat(el, state, { names, md, readOnly }) {
         </div>`;
     return;
   }
-  el.innerHTML = state.chat.map(m => m.who === "user"
+  let chatHtml = state.chat.map(m => m.who === "user"
     ? `<div class="msg user"><div class="bubble-u">${esc(m.text)}</div><time>${time(m.ts)}</time></div>`
     : `<div class="msg manager">${avatar("manager", "md")}<div class="msg-body"><div class="msg-meta"><b>${esc(names.manager ?? "Manager")}</b><time>${time(m.ts)}</time></div><div class="md">${md(m.text)}</div></div></div>`).join("");
+
+  if (!readOnly && queue.length) {
+    const queueHtml = queue.map((q, idx) => `
+      <div class="msg user pending" data-qid="${esc(q.id)}">
+        <div class="bubble-u">
+          <div class="queue-row">
+            <span class="queue-badge">Đang chờ (#${idx + 1})</span>
+            <span class="queue-text">${esc(q.text)}</span>
+            <button type="button" class="btn-cancel-queue" data-act="cancel-queue" data-qid="${esc(q.id)}" title="Bỏ tin nhắn">Bỏ</button>
+          </div>
+        </div>
+        <time>${time(q.createdAt)}</time>
+      </div>`).join("");
+    chatHtml += queueHtml;
+  }
+
+  el.innerHTML = chatHtml;
   el.scrollTop = el.scrollHeight;
 }
 

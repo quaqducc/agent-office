@@ -391,3 +391,255 @@ test("marks runs left active by a crash as interrupted on start", async () => {
     assert.equal(store.runs(ws)[0].status, "interrupted");
   } finally { await srv.close(); }
 });
+
+test("queue: gửi 3 câu liên tiếp → 3 lần chạy tuần tự, không chồng nhau", async () => {
+  let unblockFirst!: () => void;
+  const firstBlocked = new Promise<void>(res => { unblockFirst = res; });
+  let activeRuns = 0;
+  let maxConcurrent = 0;
+  const runOrder: string[] = [];
+  const { srv, api, ws } = await setup(async (role, text) => {
+    if (role === "manager" && text.startsWith("User: ")) {
+      activeRuns++;
+      maxConcurrent = Math.max(maxConcurrent, activeRuns);
+      const msg = text.replace("User: ", "").trim();
+      runOrder.push(msg);
+      if (msg === "msg 1") {
+        await firstBlocked;
+      } else {
+        await sleep(20);
+      }
+      activeRuns--;
+      return "done";
+    }
+    return "ok";
+  });
+  try {
+    const r1 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "msg 1" });
+    assert.ok(r1.json.runId);
+    assert.equal(r1.json.queued, undefined);
+
+    const r2 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "msg 2" });
+    assert.equal(r2.json.queued, true);
+    assert.equal(r2.json.position, 1);
+    assert.ok(r2.json.id);
+
+    const r3 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "msg 3" });
+    assert.equal(r3.json.queued, true);
+    assert.equal(r3.json.position, 2);
+    assert.ok(r3.json.id);
+
+    unblockFirst();
+
+    for (let i = 0; i < 100; i++) {
+      await sleep(30);
+      const q = await api("GET", `/workspaces/${ws.id}/queue`);
+      if (q.json?.length === 0 && runOrder.length === 3 && activeRuns === 0) break;
+    }
+    assert.equal(maxConcurrent, 1);
+    assert.deepEqual(runOrder, ["msg 1", "msg 2", "msg 3"]);
+    const q = await api("GET", `/workspaces/${ws.id}/queue`);
+    assert.deepEqual(q.json, []);
+  } finally { await srv.close(); }
+});
+
+test("queue: xoá tin đang chờ", async () => {
+  let unblockFirst!: () => void;
+  const firstBlocked = new Promise<void>(res => { unblockFirst = res; });
+  const executed: string[] = [];
+  const { srv, api, ws } = await setup(async (role, text) => {
+    if (role === "manager" && text.startsWith("User: ")) {
+      const msg = text.replace("User: ", "").trim();
+      executed.push(msg);
+      if (msg === "msg 1") {
+        await firstBlocked;
+      } else {
+        await sleep(20);
+      }
+      return "done";
+    }
+    return "ok";
+  });
+  try {
+    const r1 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "msg 1" });
+    assert.ok(r1.json.runId);
+
+    const r2 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "msg 2" });
+    assert.equal(r2.json.queued, true);
+    const qid2 = r2.json.id;
+
+    const r3 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "msg 3" });
+    assert.equal(r3.json.queued, true);
+    const qid3 = r3.json.id;
+
+    const beforeDel = await api("GET", `/workspaces/${ws.id}/queue`);
+    assert.equal(beforeDel.json.length, 2);
+
+    const delRes = await api("DELETE", `/workspaces/${ws.id}/queue/${qid2}`);
+    assert.equal(delRes.status, 200);
+    assert.equal(delRes.json.deleted, qid2);
+
+    const afterDel = await api("GET", `/workspaces/${ws.id}/queue`);
+    assert.equal(afterDel.json.length, 1);
+    assert.equal(afterDel.json[0].id, qid3);
+
+    unblockFirst();
+
+    for (let i = 0; i < 100; i++) {
+      await sleep(30);
+      const q = await api("GET", `/workspaces/${ws.id}/queue`);
+      if (q.json?.length === 0 && executed.length === 2) break;
+    }
+
+    assert.deepEqual(executed, ["msg 1", "msg 3"]);
+  } finally { await srv.close(); }
+});
+
+test("queue: dừng lần chạy → chạy tiếp tin kế", async () => {
+  const executed: string[] = [];
+  let finishRun1: (() => void) | undefined;
+  const { srv, api, ws } = await setup(async (role, text) => {
+    if (role === "manager" && text.startsWith("User: ")) {
+      const msg = text.replace("User: ", "").trim();
+      executed.push(msg);
+      if (msg === "slow") {
+        await new Promise<void>(resolve => { finishRun1 = resolve; });
+        return "done slow";
+      }
+      return "done next";
+    }
+    return "ok";
+  });
+  try {
+    const r1 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "slow" });
+    assert.ok(r1.json.runId);
+
+    const r2 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "next" });
+    assert.equal(r2.json.queued, true);
+
+    await sleep(40);
+    const stopRes = await api("POST", `/runs/${r1.json.runId}/stop`);
+    assert.equal(stopRes.status, 200);
+    finishRun1?.();
+
+    for (let i = 0; i < 100; i++) {
+      await sleep(30);
+      const q = await api("GET", `/workspaces/${ws.id}/queue`);
+      if (q.json?.length === 0 && executed.includes("next")) break;
+    }
+
+    assert.ok(executed.includes("slow"));
+    assert.ok(executed.includes("next"));
+  } finally {
+    finishRun1?.();
+    await srv.close();
+  }
+});
+
+test("queue: hàng đợi còn sau khi tạo lại server", async () => {
+  const dataDir = tmp("data-q-");
+  const projDir = tmp("proj-q-");
+  const executed: string[] = [];
+
+  let unblockS1: (() => void) | undefined;
+  const srv1 = await startServer({
+    port: 0, dataDir,
+    createRunner: () => fakeFactory(async (role, text) => {
+      if (role === "manager" && text.startsWith("User: ")) {
+        executed.push(text.replace("User: ", "").trim());
+        await new Promise<void>(r => { unblockS1 = r; });
+      }
+      return "ok";
+    }),
+  });
+  const api1 = async (m: string, p: string, b?: any) => {
+    const r = await fetch(srv1.url + p, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined });
+    return { status: r.status, json: await r.json() as any };
+  };
+  const ws = (await api1("POST", "/workspaces", { path: projDir, name: "PersistTest" })).json;
+
+  await api1("POST", `/workspaces/${ws.id}/messages`, { text: "run 1" });
+  await api1("POST", `/workspaces/${ws.id}/messages`, { text: "queued 2" });
+  await api1("POST", `/workspaces/${ws.id}/messages`, { text: "queued 3" });
+
+  const qBefore = await api1("GET", `/workspaces/${ws.id}/queue`);
+  assert.equal(qBefore.json.length, 2);
+
+  unblockS1?.();
+  await srv1.close();
+
+  const srv2 = await startServer({
+    port: 0, dataDir,
+    createRunner: () => fakeFactory(async (role, text) => {
+      if (role === "manager" && text.startsWith("User: ")) {
+        executed.push(text.replace("User: ", "").trim());
+      }
+      return "ok";
+    }),
+  });
+  const api2 = async (m: string, p: string, b?: any) => {
+    const r = await fetch(srv2.url + p, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined });
+    return { status: r.status, json: await r.json() as any };
+  };
+
+  try {
+    for (let i = 0; i < 100; i++) {
+      await sleep(30);
+      const q = await api2("GET", `/workspaces/${ws.id}/queue`);
+      if (q.json?.length === 0 && executed.includes("queued 2") && executed.includes("queued 3")) break;
+    }
+    const qFinal = await api2("GET", `/workspaces/${ws.id}/queue`);
+    assert.deepEqual(qFinal.json, []);
+    assert.ok(executed.includes("queued 2"));
+    assert.ok(executed.includes("queued 3"));
+  } finally {
+    await srv2.close();
+  }
+});
+
+test("queue: reply checkpoint không bị xếp hàng", async () => {
+  let devGot = "";
+  const order: string[] = [];
+  const { srv, api, ws } = await setup(async (role, text, router) => {
+    if (role === "manager") {
+      if (text.startsWith("User: ")) {
+        const msg = text.replace("User: ", "").trim();
+        order.push(msg);
+        if (msg === "first") {
+          await router.handoff("manager", { to: "developer", goal: "need approval", inputs: "", expected_output: "" });
+        }
+      }
+      return "ok";
+    }
+    if (role === "developer") {
+      devGot = await router.checkpoint("developer", { title: "Approve Payment", summary: "sum", approval_required: true, action: "Transfer 500" });
+      return "done dev";
+    }
+    return "done";
+  });
+  try {
+    await api("POST", `/workspaces/${ws.id}/messages`, { text: "first" });
+
+    let pending: any[] = [];
+    for (let i = 0; i < 100 && !pending.length; i++) {
+      await sleep(20);
+      pending = (await api("GET", `/workspaces/${ws.id}/approvals`)).json;
+    }
+    assert.equal(pending[0].action, "Transfer 500");
+
+    const r2 = await api("POST", `/workspaces/${ws.id}/messages`, { text: "second" });
+    assert.equal(r2.json.queued, true);
+
+    const replyRes = await api("POST", `/checkpoints/${pending[0].id}/reply`, { decision: "approve", note: "approved right away" });
+    assert.equal(replyRes.status, 200);
+
+    for (let i = 0; i < 100 && !devGot; i++) await sleep(20);
+    assert.match(devGot, /approved right away/);
+
+    for (let i = 0; i < 100; i++) {
+      await sleep(20);
+      if (order.includes("second")) break;
+    }
+    assert.deepEqual(order, ["first", "second"]);
+  } finally { await srv.close(); }
+});

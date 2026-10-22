@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_LIMITS } from "./config.ts";
@@ -31,6 +31,12 @@ export interface RoomDef {
   roles: string[];
 }
 
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface WorkspaceConfig {
   roles: string[];
   limits: Limits;
@@ -43,6 +49,7 @@ const slug = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 
 export const companyDir = (ws: Workspace) => join(ws.path, ".company");
 export const runsDir = (ws: Workspace) => join(companyDir(ws), "runs");
+export const queueFile = (ws: Workspace) => join(companyDir(ws), "queue.json");
 
 export class WorkspaceStore {
   readonly dataDir: string;
@@ -226,5 +233,45 @@ export class WorkspaceStore {
   runs(ws: Workspace): RunIndexEntry[] {
     const f = join(runsDir(ws), "index.json");
     return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : [];
+  }
+
+  getQueue(ws: Workspace): QueuedMessage[] {
+    const f = queueFile(ws);
+    if (!existsSync(f)) return [];
+    try {
+      const parsed = JSON.parse(readFileSync(f, "utf8"));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  enqueue(ws: Workspace, text: string): { item: QueuedMessage; position: number } {
+    const current = this.getQueue(ws);
+    const item: QueuedMessage = {
+      id: randomUUID().slice(0, 8),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...current, item];
+    writeFileSync(queueFile(ws), JSON.stringify(updated, null, 2));
+    return { item, position: updated.length };
+  }
+
+  dequeue(ws: Workspace): QueuedMessage | undefined {
+    const current = this.getQueue(ws);
+    if (!current.length) return undefined;
+    const item = current[0];
+    const updated = current.slice(1);
+    writeFileSync(queueFile(ws), JSON.stringify(updated, null, 2));
+    return item;
+  }
+
+  removeQueueItem(ws: Workspace, qid: string): boolean {
+    const current = this.getQueue(ws);
+    const filtered = current.filter(q => q.id !== qid);
+    if (filtered.length === current.length) return false;
+    writeFileSync(queueFile(ws), JSON.stringify(filtered, null, 2));
+    return true;
   }
 }

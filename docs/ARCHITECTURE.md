@@ -122,11 +122,12 @@ install.sh, install.ps1    one-line installers (check Node, then npm i -g)
 
 ### 4.1 A run, end to end
 
-1. **User message.** The UI sends `POST /workspaces/:id/messages`. Then
+1. **User message & message queue.** The UI sends `POST /workspaces/:id/messages`. Then
    `Router.sendUserMessage` runs:
-   - with no active run, it starts one: a `runId` and a root task `user → manager`, and emits
+   - with no active run, it starts one immediately: generates a `runId` and a root task `user → manager`, and emits
      `run_started`, `user_message` and `task_created`;
-   - during an active run, the message is queued to the Manager as a follow-up.
+   - during an active run, incoming messages enter a persistent FIFO queue (`<workspace>/.company/queue.json`) and return `{ queued: true, position, id }` instead of interleaving with or interrupting the active run;
+   - when the active run finishes (`finishRun`) or is stopped (`stopRun`), the next queued message is automatically popped and starts a new run without overlapping. Server startup also recovers and drains lingering queues. Checkpoint approvals strictly bypass the queue.
 2. **Queues.** Every role has a FIFO queue of work items. A role processes one item at a time. A
    global `maxConcurrent` limits how many roles talk to the model at once.
 3. **Runners.** The Router gets a `RoleRunner` for the role from the `RunnerFactory`.
@@ -346,8 +347,10 @@ a per-role sandbox is the planned upgrade.
 | `GET /workspaces` · `POST /workspaces {path, name?}` | list / register a workspace |
 | `PATCH /workspaces/:id {name}` | rename a workspace |
 | `GET /workspaces/:id/config` · `/runs` · `/approvals` | team + limits / run history / pending approvals |
+| `GET /workspaces/:id/queue` | list queued messages waiting to run (`QueuedMessage[]`) |
+| `DELETE /workspaces/:id/queue/:qid` | cancel a queued message (`{deleted: qid}`) |
 | `PUT /workspaces/:id/config` `{roles: string[], template?: string, rooms?: RoomDef[]}` | update workspace roles, template, and rooms (validates installed roles; rebuilds router context when idle) |
-| `POST /workspaces/:id/messages {text}` | message the Manager (starts or joins a run) |
+| `POST /workspaces/:id/messages {text}` | message the Manager (starts run `{runId}` or queues `{queued: true, position, id}`) |
 | `GET /runs/:runId/events` · `POST /runs/:runId/stop` | full event log of a run / stop a run |
 | `POST /checkpoints/:id/reply {decision: approve\|reject\|edit, note}` | the user's answer to an approval |
 | `GET /events?workspace=:id` | live Server-Sent Events (TeamEvents) |
@@ -404,6 +407,7 @@ a per-role sandbox is the planned upgrade.
 | `~/.agent-company/library/` | store-installed roles, personas, skills; `installed.json` |
 | `~/.agent-company/pi/` | generated `models.json`, pi `auth.json` (do not edit by hand) |
 | `<workspace>/.company/config.json` | optional `{roles: [...], limits: {...}}` for that workspace |
+| `<workspace>/.company/queue.json` | persistent FIFO message queue |
 | `<workspace>/.company/runs/` | `<runId>.jsonl` event logs + `index.json` run summaries |
 | `<workspace>/.company/sessions/<role>/` | pi conversation history per role |
 
