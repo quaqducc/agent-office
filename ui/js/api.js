@@ -22,6 +22,7 @@ export const api = {
   workspaces: () => call("GET", "/workspaces"),
   addWorkspace: (path, name) => call("POST", "/workspaces", { path, name }),
   renameWorkspace: (id, name) => call("PATCH", `/workspaces/${enc(id)}`, { name }),
+  fsPickFolder: () => call("POST", "/fs/pick-folder"),
   fsBrowse: path => call("POST", "/fs/browse", { path }),
   offices: () => call("GET", "/offices"),
   config: id => call("GET", `/workspaces/${enc(id)}/config`),

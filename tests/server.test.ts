@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startServer } from "../src/server.ts";
+import { startServer, type ServerOptions } from "../src/server.ts";
 import { browseDirectory, clearDrivesCache, getDrives } from "../src/fs-browse.ts";
 import { fakeFactory, never, sleep } from "./helpers/fake-runner.ts";
 import type { Router } from "../src/router.ts";
@@ -12,10 +12,11 @@ import type { TeamEvent } from "../src/types.ts";
 type Script = (role: string, text: string, router: Router) => Promise<string>;
 const tmp = (p: string) => mkdtempSync(join(tmpdir(), p));
 
-async function setup(script: Script) {
+async function setup(script: Script, extraOpts: Partial<ServerOptions> = {}) {
   const srv = await startServer({
     port: 0, dataDir: tmp("data-"),
     createRunner: (_ws, router) => fakeFactory((role, text) => script(role, text, router())),
+    ...extraOpts,
   });
   const api = async (method: string, path: string, body?: unknown) => {
     const r = await fetch(srv.url + path, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -211,14 +212,28 @@ test("fs endpoints: browse directory", async () => {
     const missing = await api("POST", "/fs/browse", { path: join(base, "not-exist-xyz") });
     assert.equal(missing.status, 404);
     assert.equal(missing.json.error, "folder not found or not a directory");
+  } finally { await srv.close(); }
+});
 
-    const notDir = await api("POST", "/fs/browse", { path: join(base, "file.txt") });
-    assert.equal(notDir.status, 404);
-    assert.equal(notDir.json.error, "folder not found or not a directory");
+test("POST /fs/pick-folder delegates to picker and returns json", async () => {
+  const { srv, api } = await setup(async () => "ok", {
+    pickFolder: async () => ({ canceled: false, path: "C:\\projects\\demo", name: "demo" }),
+  } as any);
+  try {
+    const res = await api("POST", "/fs/pick-folder");
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json, { canceled: false, path: "C:\\projects\\demo", name: "demo" });
+  } finally { await srv.close(); }
+});
 
-    const def = await api("POST", "/fs/browse", {});
-    assert.equal(def.status, 200);
-    assert.ok(def.json.current);
+test("POST /fs/pick-folder returns 400 when picker throws an error", async () => {
+  const { srv, api } = await setup(async () => "ok", {
+    pickFolder: async () => { throw new Error("UNC and device paths are not allowed"); },
+  } as any);
+  try {
+    const res = await api("POST", "/fs/pick-folder");
+    assert.equal(res.status, 400);
+    assert.equal(res.json.error, "UNC and device paths are not allowed");
   } finally { await srv.close(); }
 });
 

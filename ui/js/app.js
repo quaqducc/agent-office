@@ -435,14 +435,7 @@ async function addWorkspace() {
   const d = el.ask;
   d.classList.add("ws-dialog");
 
-  let currentPath = "";
-  let parentPath = null;
-  let roots = [];
-  let home = "";
-  let folders = [];
-  let errorMsg = null;
   let userEditedName = false;
-  let browseSeq = 0;
 
   function baseName(p) {
     const s = (p ?? "").trim().replace(/^["']|["']$/g, "").replace(/[\\/]+$/, "");
@@ -450,184 +443,90 @@ async function addWorkspace() {
     return i >= 0 ? s.slice(i + 1) : s;
   }
 
-  async function loadDir(target) {
-    const seq = ++browseSeq;
+  d.innerHTML = `<form method="dialog" class="ask-form ws-browse-form">
+    <h2>Thêm workspace</h2>
+    <p class="ask-text">Mở thư mục dự án trên máy tính hoặc dán trực tiếp đường dẫn bên dưới.</p>
+
+    <div class="ws-pick-hero">
+      <button type="button" class="btn primary ws-native-pick-btn">
+        ${icon("folder")} <span>Duyệt thư mục trên máy…</span>
+      </button>
+      <div class="ws-divider"><span>hoặc dán đường dẫn thư mục</span></div>
+    </div>
+
+    <div class="ws-form-fields">
+      <label class="field">
+        <span>Đường dẫn thư mục</span>
+        <input id="ws-input-path" name="path" placeholder="D:\\projects\\my-app hoặc /home/user/my-app" autocomplete="off" required>
+      </label>
+      <label class="field">
+        <span>Tên hiển thị <em>(tuỳ chọn)</em></span>
+        <input id="ws-input-name" name="name" placeholder="Để trống sẽ dùng tên thư mục" autocomplete="off">
+      </label>
+    </div>
+
+    <div class="ask-buttons">
+      <button type="button" class="btn" value="cancel">Huỷ</button>
+      <button type="submit" class="btn primary" value="ok">Thêm workspace</button>
+    </div>
+  </form>`;
+
+  const form = d.querySelector("form");
+  const pickBtn = d.querySelector(".ws-native-pick-btn");
+  const pathInput = d.querySelector("#ws-input-path");
+  const nameInput = d.querySelector("#ws-input-name");
+  const submitBtn = d.querySelector('button[type="submit"]');
+
+  nameInput.addEventListener("input", () => {
+    userEditedName = true;
+  });
+
+  pathInput.addEventListener("input", () => {
+    if (!userEditedName) {
+      nameInput.value = baseName(pathInput.value);
+    }
+  });
+
+  pickBtn.addEventListener("click", async () => {
+    pickBtn.disabled = true;
     try {
-      const clean = target ? target.trim().replace(/^["']|["']$/g, "").trim() : undefined;
-      const res = await api.fsBrowse(clean);
-      if (seq !== browseSeq || !d.open) return false;
-      currentPath = res.current;
-      parentPath = res.parent;
-      roots = res.roots || [];
-      home = res.home || "";
-      folders = res.folders || [];
-      errorMsg = res.error || null;
-      return !res.error;
-    } catch (e) {
-      if (seq !== browseSeq || !d.open) return false;
-      errorMsg = e.message;
-      return false;
-    }
-  }
-
-  await loadDir();
-
-  function renderDialog(selectedPath, selectedName) {
-    const curPath = selectedPath || currentPath;
-    const curName = selectedName !== undefined ? selectedName : (curPath ? baseName(curPath) : "");
-
-    d.innerHTML = `<form method="dialog" class="ask-form ws-browse-form">
-      <h2>Thêm workspace</h2>
-      <p class="ask-text">Chọn thư mục project trên máy hoặc dán trực tiếp đường dẫn bên dưới.</p>
-
-      <div class="ws-nav-bar">
-        <div class="ws-nav-roots">
-          ${roots.map(r => `<button type="button" class="btn small ws-root-btn${r === currentPath ? " primary" : ""}" data-path="${esc(r)}">${esc(r)}</button>`).join("")}
-          ${home ? `<button type="button" class="btn small ws-home-btn" data-path="${esc(home)}" title="Thư mục cá nhân">Home</button>` : ""}
-        </div>
-        <button type="button" class="btn small ws-up-btn" ${parentPath ? `data-path="${esc(parentPath)}"` : "disabled"} title="Lên thư mục cha">↑ Lên cấp</button>
-      </div>
-
-      <div class="ws-cur-bar" title="${esc(currentPath)}">
-        <span class="ws-cur-icon">${icon("folder")}</span>
-        <span class="ws-cur-text">${esc(currentPath || "…")}</span>
-      </div>
-
-      <div class="ws-folder-list" role="listbox" tabindex="0">
-        ${errorMsg ? `<div class="ws-browse-msg warn">${icon("alert")}<span>${esc(errorMsg === "permission denied" ? "Không có quyền truy cập thư mục này." : errorMsg)}</span></div>` : ""}
-        ${!errorMsg && folders.length === 0 ? `<div class="ws-browse-msg muted">Thư mục này không có thư mục con.</div>` : ""}
-        ${folders.map(f => `
-          <button type="button" class="ws-folder-item${f.path === curPath ? " selected" : ""}" data-name="${esc(f.name)}" data-path="${esc(f.path)}">
-            ${icon("folder")}<span>${esc(f.name)}</span>
-          </button>
-        `).join("")}
-      </div>
-      <small class="ws-browse-hint">Bấm để chọn · Bấm đúp để mở</small>
-
-      <div class="ws-form-fields">
-        <label class="field">
-          <span>Đường dẫn thư mục</span>
-          <div class="ws-path-input-row">
-            <input id="ws-input-path" name="path" value="${esc(curPath)}" placeholder="D:\\projects\\my-app" autocomplete="off" required>
-            <button type="button" class="btn small ws-goto-btn" title="Duyệt thư mục đã nhập">Duyệt</button>
-          </div>
-        </label>
-        <label class="field">
-          <span>Tên hiển thị <em>(tuỳ chọn)</em></span>
-          <input id="ws-input-name" name="name" value="${esc(curName)}" placeholder="Để trống sẽ dùng tên thư mục" autocomplete="off">
-        </label>
-      </div>
-
-      <div class="ask-buttons">
-        <button type="button" class="btn" value="cancel">Huỷ</button>
-        <button type="submit" class="btn primary" value="ok">Thêm workspace</button>
-      </div>
-    </form>`;
-
-    const form = d.querySelector("form");
-    const pathInput = d.querySelector("#ws-input-path");
-    const nameInput = d.querySelector("#ws-input-name");
-    const list = d.querySelector(".ws-folder-list");
-
-    function focusFirstItem() {
-      const first = d.querySelector(".ws-folder-item:first-of-type") || d.querySelector(".ws-folder-list");
-      first?.focus();
-    }
-
-    nameInput.addEventListener("input", () => {
-      userEditedName = true;
-    });
-
-    pathInput.addEventListener("input", () => {
-      if (!userEditedName) {
-        nameInput.value = baseName(pathInput.value);
-      }
-    });
-
-    async function triggerBrowseInput() {
-      const p = pathInput.value.trim();
-      if (!p) return;
-      const ok = await loadDir(p);
-      if (!d.open) return;
-      renderDialog(ok ? currentPath : p, nameInput.value);
-      if (ok) focusFirstItem();
-    }
-
-    pathInput.addEventListener("keydown", async ev => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        await triggerBrowseInput();
-      }
-    });
-
-    d.querySelector(".ws-goto-btn").addEventListener("click", triggerBrowseInput);
-
-    d.querySelectorAll(".ws-root-btn, .ws-home-btn, .ws-up-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const p = btn.dataset.path;
-        if (!p) return;
-        const ok = await loadDir(p);
-        if (!d.open) return;
-        renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
-        if (ok) focusFirstItem();
-      });
-    });
-
-    list.querySelectorAll(".ws-folder-item").forEach(item => {
-      item.addEventListener("click", () => {
-        list.querySelectorAll(".ws-folder-item").forEach(i => i.classList.remove("selected"));
-        item.classList.add("selected");
-        pathInput.value = item.dataset.path;
-        if (!userEditedName) nameInput.value = item.dataset.name;
-      });
-      item.addEventListener("dblclick", async () => {
-        const ok = await loadDir(item.dataset.path);
-        if (!d.open) return;
-        renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
-        if (ok) focusFirstItem();
-      });
-      item.addEventListener("keydown", async ev => {
-        if (ev.key === "Enter") {
-          ev.preventDefault();
-          const ok = await loadDir(item.dataset.path);
-          if (!d.open) return;
-          renderDialog(currentPath, userEditedName ? nameInput.value : baseName(currentPath));
-          if (ok) focusFirstItem();
-        } else if (ev.key === "ArrowDown") {
-          ev.preventDefault();
-          const next = item.nextElementSibling;
-          if (next && next.classList.contains("ws-folder-item")) next.focus();
-        } else if (ev.key === "ArrowUp") {
-          ev.preventDefault();
-          const prev = item.previousElementSibling;
-          if (prev && prev.classList.contains("ws-folder-item")) prev.focus();
+      const res = await api.fsPickFolder();
+      if (!res.canceled && res.path) {
+        pathInput.value = res.path;
+        if (!userEditedName) {
+          nameInput.value = res.name || baseName(res.path);
         }
-      });
-    });
-
-    d.querySelector('button[value="cancel"]').addEventListener("click", () => d.close("cancel"));
-
-    form.addEventListener("submit", async ev => {
-      ev.preventDefault();
-      if (!form.reportValidity()) return;
-      const targetPath = pathInput.value.trim();
-      const targetName = nameInput.value.trim() || undefined;
-      try {
-        const ws = await api.addWorkspace(targetPath, targetName);
-        d.close("ok");
-        await loadWorkspaces(ws.id);
-        toast(`Đã thêm ${ws.name}`, "good");
-      } catch (err) {
-        toast(`Không thêm được: ${err.message}`, "bad");
+        submitBtn.focus();
       }
-    });
-  }
+    } catch (err) {
+      toast(`Lỗi duyệt thư mục: ${err.message}`, "bad");
+    } finally {
+      pickBtn.disabled = false;
+    }
+  });
 
-  renderDialog(currentPath, baseName(currentPath));
+  d.querySelector('button[value="cancel"]').addEventListener("click", () => d.close("cancel"));
+
+  form.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    if (!form.reportValidity()) return;
+    const targetPath = pathInput.value.trim();
+    const targetName = nameInput.value.trim() || undefined;
+    try {
+      const ws = await api.addWorkspace(targetPath, targetName);
+      d.close("ok");
+      await loadWorkspaces(ws.id);
+      toast(`Đã thêm ${ws.name}`, "good");
+    } catch (err) {
+      toast(`Không thêm được: ${err.message}`, "bad");
+    }
+  });
+
   d.addEventListener("close", () => {
     d.classList.remove("ws-dialog");
   }, { once: true });
   d.showModal();
+}
 }
 
 el.form.addEventListener("submit", async ev => {

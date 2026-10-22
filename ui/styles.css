@@ -708,37 +708,26 @@ h1, h2, h3 { margin: 0; }
 .field input, .field textarea { border: 1px solid var(--line); background: var(--panel-2); border-radius: 10px; padding: 10px 12px; resize: vertical; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); background: var(--panel); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ask-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-.ask.ws-dialog { width: min(600px, calc(100vw - 32px)); max-height: min(90vh, 760px); }
-.ws-browse-form { padding: 22px 24px; display: grid; gap: 12px; }
-.ws-nav-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.ws-nav-roots { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.ws-cur-bar {
-  display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line-2);
-  border-radius: 8px; padding: 6px 10px; font-family: monospace; font-size: 13px; color: var(--ink-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.ask.ws-dialog { width: min(520px, calc(100vw - 32px)); }
+.ws-browse-form { padding: 24px; display: grid; gap: 16px; }
+.ws-pick-hero {
+  display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+  background: var(--panel-2); border: 1px dashed var(--line); border-radius: 12px;
+  padding: 22px 20px 18px; text-align: center;
 }
-.ws-cur-bar .ico { width: 16px; height: 16px; flex: none; color: var(--muted); }
-.ws-cur-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-folder-list {
-  height: 260px; overflow-y: auto; border: 1px solid var(--line-2); border-radius: 8px;
-  padding: 4px; display: grid; gap: 2px; align-content: start; background: var(--panel);
+.ws-native-pick-btn {
+  font-size: 15px; font-weight: 600; padding: 12px 20px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
 }
-.ws-browse-hint { color: var(--muted); font-size: 12px; margin-top: -6px; }
-.ws-folder-item {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; background: none;
-  border-radius: 6px; text-align: left; cursor: pointer; color: var(--ink); font-size: 13.5px; width: 100%;
+.ws-native-pick-btn .ico { width: 18px; height: 18px; }
+.ws-divider {
+  display: flex; align-items: center; color: var(--muted); font-size: 12px;
 }
-.ws-folder-item:hover, .ws-folder-item:focus-visible { background: var(--panel-2); outline: none; }
-.ws-folder-item.selected { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
-.ws-folder-item .ico { width: 16px; height: 16px; flex: none; color: var(--muted); }
-.ws-folder-item.selected .ico { color: var(--accent-text); }
-.ws-browse-msg { display: flex; align-items: center; gap: 8px; padding: 12px; font-size: 13px; }
-.ws-browse-msg.warn { color: var(--approval); }
-.ws-browse-msg.muted { color: var(--muted); }
-.ws-browse-msg .ico { width: 16px; height: 16px; flex: none; }
-.ws-form-fields { display: grid; gap: 10px; }
-.ws-path-input-row { display: flex; gap: 6px; }
-.ws-path-input-row input { flex: 1; }
+.ws-divider::before, .ws-divider::after {
+  content: ""; flex: 1; border-bottom: 1px solid var(--line-2);
+}
+.ws-divider span { padding: 0 10px; }
+.ws-form-fields { display: grid; gap: 12px; }
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 60; font-weight: 600;
   background: var(--ink); color: var(--panel); padding: 10px 18px; border-radius: 12px; box-shadow: var(--shadow-lg);

@@ -340,6 +340,7 @@ a per-role sandbox is the planned upgrade.
 | `GET /store` | base + catalog roles with `installed` (`"base"` \| `"store"` \| `false`) and `updateAvailable` |
 | `POST /store/roles/:id/install` · `DELETE /store/roles/:id` | install or update / uninstall a store role |
 | `GET /roles` | installed roles (`id, name, description, owns`) |
+| `POST /fs/pick-folder` | trigger native OS folder picker (`{canceled, path?, name?}`) |
 | `POST /fs/browse` `{path?}` | browse folders only (`{current, parent, home, roots, folders, error?}`) |
 | `GET /offices` | preset office templates (`startup-mvp`, `software-house`, `content-marketing`, `research-lab`) |
 | `GET /workspaces` · `POST /workspaces {path, name?}` | list / register a workspace |

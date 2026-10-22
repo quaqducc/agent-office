@@ -13,7 +13,7 @@ import { loadRole, roleIds } from "./library.ts";
 import { createPiRunnerFactory } from "./pi-runner.ts";
 import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
-import { browseDirectory } from "./fs-browse.ts";
+import { browseDirectory, pickNativeFolder, type PickFolderResult } from "./fs-browse.ts";
 import { OFFICE_TEMPLATES } from "./offices.ts";
 
 export interface ServerOptions {
@@ -21,6 +21,7 @@ export interface ServerOptions {
   dataDir?: string;
   /** Override for tests: build the runner factory for a workspace. */
   createRunner?: (ws: Workspace, router: () => Router) => RunnerFactory;
+  pickFolder?: () => Promise<PickFolderResult>;
 }
 
 /** `sig`: signature of installed roles, workspace roles and rooms; rebuilt when changed and idle. */
@@ -210,6 +211,14 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     }
     if (m === "GET" && url.pathname === "/offices") {
       return json(200, OFFICE_TEMPLATES);
+    }
+    if (m === "POST" && url.pathname === "/fs/pick-folder") {
+      try {
+        const picker = o.pickFolder ?? pickNativeFolder;
+        return json(200, await picker());
+      } catch (e) {
+        throw new HttpError(400, (e as Error).message);
+      }
     }
     if (m === "POST" && url.pathname === "/fs/browse") {
       const b = await body(req);

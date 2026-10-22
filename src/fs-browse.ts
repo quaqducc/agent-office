@@ -2,6 +2,107 @@ import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const defaultExecFile = promisify(execFile);
+
+export interface PickFolderResult {
+  canceled: boolean;
+  path?: string;
+  name?: string;
+}
+
+export function baseName(p: string): string {
+  const s = p.trim().replace(/^["']|["']$/g, "").replace(/[\\/]+$/, "");
+  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+
+export async function pickNativeFolder(
+  customExec?: (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }>,
+  platform = process.platform,
+): Promise<PickFolderResult> {
+  const run = customExec || defaultExecFile;
+  let rawPath = "";
+
+  if (platform === "win32") {
+    const psScript = [
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
+      "$d.Description = 'Chọn thư mục workspace'",
+      "$d.ShowNewFolderButton = $true",
+      "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+      "  [Console]::WriteLine($d.SelectedPath)",
+      "}",
+    ].join("; ");
+
+    try {
+      const { stdout } = await run("powershell", [
+        "-NoProfile",
+        "-Command",
+        psScript,
+      ]);
+      rawPath = stdout.trim();
+    } catch {
+      return { canceled: true };
+    }
+  } else if (platform === "darwin") {
+    try {
+      const { stdout } = await run("osascript", [
+        "-e",
+        'POSIX path of (choose folder with prompt "Chọn thư mục workspace")',
+      ]);
+      rawPath = stdout.trim();
+    } catch {
+      return { canceled: true };
+    }
+  } else {
+    try {
+      const { stdout } = await run("zenity", [
+        "--file-selection",
+        "--directory",
+        "--title=Chọn thư mục workspace",
+      ]);
+      rawPath = stdout.trim();
+    } catch {
+      try {
+        const { stdout } = await run("kdialog", [
+          "--getexistingdirectory",
+          ".",
+          "--title",
+          "Chọn thư mục workspace",
+        ]);
+        rawPath = stdout.trim();
+      } catch {
+        return { canceled: true };
+      }
+    }
+  }
+
+  if (!rawPath) {
+    return { canceled: true };
+  }
+
+  if (platform === "win32") {
+    assertSafeWindowsPath(rawPath);
+  }
+
+  let finalPath = rawPath.replace(/[\\/]+$/, "");
+  if (platform === process.platform) {
+    finalPath = resolve(finalPath);
+    if (platform === "win32" && !/^[a-zA-Z]:[\\/]?$/.test(finalPath)) {
+      finalPath = finalPath.replace(/[\\/]+$/, "");
+    }
+  }
+
+  return {
+    canceled: false,
+    path: finalPath,
+    name: baseName(finalPath),
+  };
+}
 
 const SYSTEM_DIRS = new Set([
   "$recycle.bin",
