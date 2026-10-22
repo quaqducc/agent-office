@@ -100,14 +100,20 @@ export async function buildRoleSession(o: {
     noExtensions: true,
     // Workspace fence: block file/shell access outside the workspace and to .company/.
     extensionFactories: [pi => {
-      pi.on("tool_call", (e: any) => {
+      pi.on("tool_call", async (e: any) => {
         const r = checkToolCall(e.toolName, e.input, cwd);
         if (r.block) return { block: true, reason: r.reason };
         if (e.toolName === "write" || e.toolName === "edit") {
           const runId = o.router().activeRunId();
           const targetPath = e.input?.path;
           if (runId && typeof targetPath === "string") {
-            void captureShadow(cwd, runId, targetPath).catch(() => {});
+            try {
+              const shadowPromise = captureShadow(cwd, runId, targetPath);
+              const timeoutPromise = new Promise<void>(resolve => setTimeout(resolve, 2000));
+              await Promise.race([shadowPromise, timeoutPromise]);
+            } catch (err) {
+              console.warn("[shadow-hook] capture error ignored:", err);
+            }
           }
         }
         return undefined;

@@ -134,3 +134,26 @@ test("captureShadow không bao giờ ném lỗi ra ngoài khi gặp lỗi I/O b�
     await captureShadow("/invalid/non/existent/path/here", "run-x", "foo.txt");
   });
 });
+
+test("hook tool_call awaits captureShadow before tool writes to disk preventing race condition", async () => {
+  const ws = await makeTempWorkspace();
+  const runId = "run-race";
+  const filePath = "config.json";
+  await fs.writeFile(join(ws, filePath), '{"version": 1}', "utf-8");
+
+  // Simulated tool_call hook with Promise.race and 2s timeout
+  const handleToolCall = async (targetPath: string) => {
+    const shadowPromise = captureShadow(ws, runId, targetPath);
+    const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 2000));
+    await Promise.race([shadowPromise, timeoutPromise]);
+  };
+
+  // Await the hook before tool writes version 2
+  await handleToolCall(filePath);
+  await fs.writeFile(join(ws, filePath), '{"version": 2}', "utf-8");
+
+  const shadowContent = await getShadowFileContent(ws, runId, filePath);
+  assert.equal(shadowContent, '{"version": 1}');
+
+  await fs.rm(ws, { recursive: true, force: true });
+});
