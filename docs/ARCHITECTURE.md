@@ -380,6 +380,11 @@ a per-role sandbox is the planned upgrade.
   3. Single presence invariant: `RoleWalkQueue` strictly ensures a role never has duplicate characters on screen, queueing subsequent walk tasks and hiding the desk character (`.desk.away`) while away.
   4. Interactions: task handoff (creator walks to assignee), task completion/failure (assignee walks result back), checkpoints and approvals (role walks to Manager or User at `ENTRANCE`, displaying `wait` or `need` bubbles), and manager replies (Manager walks to user at `ENTRANCE`).
   5. Speed scaling & accessibility: replay speeds (x1 ~1.2s/leg, x4 ~300ms, x16 ~75ms, instant/0 flashes bubble directly without walking), respects `prefers-reduced-motion`, limits concurrent walkers to 3–4 for performance, and instantly cancels running animations via `cancelAllWalks` when switching back to live mode.
+- **Question selector in Flow and Log tabs (`derive.js`, `panels.js`, `app.js`).**
+  Both "Luồng việc" (Flow) and "Nhật ký" (Log) tabs feature a synchronized question selector dropdown listing user questions sent in the workspace, newest first with truncated preview, timestamp, and status ("đang chạy", "xong", "dừng"):
+  1. `extractQuestions({ runs, liveLog, activeRunId, cachedEvents })`: Extracts questions from run summaries and decomposes mid-run follow-ups (`user_message` within the same active run) into distinct items.
+  2. `filterQuestionData({ questionId, questions, events, tasks })`: Partitions events and tasks by sequence boundaries between consecutive questions in the same run.
+  3. Seamless inspection without switching to replay: Selecting past run questions fetches events on demand via `api.events(runId)` to render the sliced flow tree and event log, while Pixel Office and Chat remain completely live in `app.live` without triggering replay mode.
 - **Rendering safety.** Model text is escaped (`util.esc`) or rendered with the safe Markdown
   wrapper: raw HTML shows as text, only http(s) links, no images.
 - **Look and copy.** Light and dark themes follow the system through CSS tokens at the top of

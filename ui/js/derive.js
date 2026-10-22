@@ -1,6 +1,176 @@
 // Pure views derived from reducer state (Node-safe): the "now" overview, live links, activity feed.
+import { plain } from "./util.js";
 
 const OPEN = new Set(["queued", "running"]);
+
+/** Truncate preview text cleanly. */
+function previewText(text, max = 52) {
+  const clean = plain(text);
+  if (!clean) return "(Không có nội dung)";
+  return clean.length > max ? clean.slice(0, max) + "…" : clean;
+}
+
+export const STATUS_LABEL = {
+  running: "đang chạy",
+  done: "xong",
+  stopped: "dừng",
+};
+
+/**
+ * Extract all questions across runs and active live log, sorted newest first.
+ * @param {{
+ *   runs: Array<{runId: string, startedAt: string, endedAt?: string, status: string, firstMessage: string}>,
+ *   liveLog?: Array<{runId: string, seq: number, ts: string, type: string, data?: any}>,
+ *   activeRunId?: string|null,
+ *   cachedEvents?: Record<string, Array<any>> | Map<string, Array<any>>,
+ * }} params
+ */
+export function extractQuestions({ runs = [], liveLog = [], activeRunId = null, cachedEvents = {} } = {}) {
+  const getCached = id => (cachedEvents instanceof Map ? cachedEvents.get(id) : cachedEvents[id]);
+  const out = [];
+
+  const knownRunIds = new Set(runs.map(r => r.runId));
+  const allRuns = [...runs];
+  if (activeRunId && !knownRunIds.has(activeRunId)) {
+    const firstMsg = liveLog.find(e => e.type === "user_message")?.data?.text || "";
+    allRuns.unshift({
+      runId: activeRunId,
+      startedAt: liveLog[0]?.ts || new Date().toISOString(),
+      status: "active",
+      firstMessage: firstMsg,
+    });
+  }
+
+  for (const r of allRuns) {
+    const isActive = r.runId === activeRunId || r.status === "active";
+    let events = null;
+    if (r.runId === activeRunId && liveLog && liveLog.length > 0) {
+      events = liveLog;
+    } else {
+      const cached = getCached(r.runId);
+      if (cached && cached.length > 0) {
+        events = cached;
+      }
+    }
+
+    if (events) {
+      const userMsgs = events.filter(e => e.type === "user_message" && (!e.runId || e.runId === r.runId));
+      if (userMsgs.length > 0) {
+        userMsgs.forEach((msg, idx) => {
+          const isLatestInRun = idx === userMsgs.length - 1;
+          let status = "done";
+          if (isActive && isLatestInRun) {
+            status = "running";
+          } else if (r.status === "stopped" || r.status === "failed" || r.status === "cancelled") {
+            status = "stopped";
+          } else if (r.status === "active") {
+            status = "done";
+          } else {
+            status = r.status === "done" ? "done" : (r.status === "running" ? "running" : "stopped");
+          }
+
+          const text = msg.data?.text || "";
+          out.push({
+            id: `${r.runId}:seq-${msg.seq}`,
+            runId: r.runId,
+            seq: msg.seq,
+            text,
+            shortText: previewText(text),
+            ts: msg.ts || r.startedAt,
+            status,
+            isCurrent: false,
+          });
+        });
+        continue;
+      }
+    }
+
+    let status = "done";
+    if (isActive || r.status === "active" || r.status === "running") {
+      status = "running";
+    } else if (r.status === "stopped" || r.status === "failed" || r.status === "cancelled") {
+      status = "stopped";
+    }
+    const text = r.firstMessage || "";
+    out.push({
+      id: `${r.runId}:first`,
+      runId: r.runId,
+      seq: 1,
+      text,
+      shortText: previewText(text),
+      ts: r.startedAt,
+      status,
+      isCurrent: false,
+    });
+  }
+
+  out.sort((a, b) => {
+    const ta = Date.parse(a.ts) || 0;
+    const tb = Date.parse(b.ts) || 0;
+    if (ta !== tb) return tb - ta;
+    return (b.seq || 0) - (a.seq || 0);
+  });
+
+  if (out.length > 0) {
+    out[0].isCurrent = true;
+  }
+
+  return out;
+}
+
+/**
+ * Filter tasks and log events corresponding to a specific question.
+ * @param {{
+ *   questionId: string,
+ *   questions: Array<any>,
+ *   events: Array<any>,
+ *   tasks: Record<string, any>,
+ * }} params
+ * @returns {{ tasks: Record<string, any>, log: Array<any> }}
+ */
+export function filterQuestionData({ questionId, questions = [], events = [], tasks = {} } = {}) {
+  if (!questionId || questions.length === 0) {
+    return { tasks, log: events };
+  }
+
+  const q = questions.find(x => x.id === questionId);
+  if (!q) {
+    return { tasks, log: events };
+  }
+
+  const runQuestions = questions
+    .filter(x => x.runId === q.runId)
+    .sort((a, b) => (a.seq || 0) - (b.seq || 0));
+
+  if (runQuestions.length <= 1) {
+    return { tasks, log: events };
+  }
+
+  const qIdx = runQuestions.findIndex(x => x.id === q.id);
+  const startSeq = q.seq || 0;
+  const nextSeq = qIdx < runQuestions.length - 1 ? runQuestions[qIdx + 1].seq : Infinity;
+
+  const filteredLog = events.filter(e => {
+    const s = e.seq || 0;
+    return s >= startSeq && s < nextSeq;
+  });
+
+  const taskIdsInSlice = new Set();
+  for (const e of filteredLog) {
+    if (e.taskId) taskIdsInSlice.add(e.taskId);
+    if (e.data?.taskId) taskIdsInSlice.add(e.data.taskId);
+    if (e.type === "task_created" && e.data?.taskId) taskIdsInSlice.add(e.data.taskId);
+  }
+
+  const filteredTasks = {};
+  for (const [tid, task] of Object.entries(tasks)) {
+    if (taskIdsInSlice.has(tid)) {
+      filteredTasks[tid] = task;
+    }
+  }
+
+  return { tasks: filteredTasks, log: filteredLog };
+}
 
 /** "1:05" / "1:02:05" */
 export function duration(ms) {

@@ -6,8 +6,8 @@ import { initialState, mergeEvents, reduce } from "./state.js";
 import { cancelAllWalks, fit, pauseAllWalks, playEffect, renderOffice, resumeAllWalks } from "./office.js";
 import { deskLayout } from "./layout.js";
 import { icon } from "./icons.js";
-import { duration } from "./derive.js";
-import { renderApprovals, renderChat, renderDrawer, renderFeed, renderFlow, renderLog, renderNow, runLabel } from "./panels.js";
+import { duration, extractQuestions, filterQuestionData } from "./derive.js";
+import { renderApprovals, renderChat, renderDrawer, renderFeed, renderFlow, renderLog, renderNow, renderQuestionOptions, runLabel } from "./panels.js";
 import { esc } from "./util.js";
 import { openSettings, showSetup } from "./settings.js";
 import { openStore } from "./store.js";
@@ -16,6 +16,7 @@ import { openOfficeDialog } from "./office-dialog.js";
 const $ = sel => document.querySelector(sel);
 const el = {
   office: $("#office"), stage: $("#stage"), onboard: $("#onboard"), chat: $("#chat"), flow: $("#flow"), log: $("#log"),
+  flowQuestion: $("#flow-question"), logQuestion: $("#log-question"),
   approvals: $("#approvals"), feed: $("#feed"), now: $("#now-body"),
   wsBtn: $("#ws-btn"), wsPop: $("#ws-pop"), wsName: $("#ws-name"), runBtn: $("#run-btn"), runPop: $("#run-pop"), runName: $("#run-name"),
   stop: $("#stop-run"), conn: $("#conn"), replay: $("#replay-controls"), replayToggle: $("#replay-toggle"), replayBar: $("#replay-bar"),
@@ -47,6 +48,9 @@ const app = {
   tab: "chat",
   logType: "",
   version: "",
+  selectedQuestionId: "current",
+  cachedRunEvents: new Map(),
+  cachedRunStates: new Map(),
 };
 
 const md = createMarkdown(Marked);
@@ -145,10 +149,76 @@ function draw() {
   renderNow(el.now, s, { names: app.names, replay: readOnly, noWorkspace: !app.wsId });
   renderFeed(el.feed, s, { names: app.names });
   renderChat(el.chat, s, { names: app.names, md, readOnly });
-  if (app.tab === "flow") renderFlow(el.flow, s, { names: app.names, md });
-  if (app.tab === "log") renderLog(el.log, s, { names: app.names, role: el.logRole.value, type: app.logType, highlight: app.selected });
-  el.logCount.textContent = s.log.length ? String(s.log.length) : "";
-  const nTasks = Object.keys(s.tasks).length;
+
+  // Question selector derivation & data slicing for Flow and Log panels
+  const questions = extractQuestions({
+    runs: app.runs,
+    liveLog: app.live?.log ?? [],
+    activeRunId: app.live?.runId ?? null,
+    cachedEvents: app.cachedRunEvents,
+  });
+  renderQuestionOptions(el.flowQuestion, questions, app.selectedQuestionId);
+  renderQuestionOptions(el.logQuestion, questions, app.selectedQuestionId);
+
+  const currentQ = questions.find(q => q.isCurrent) || questions[0];
+  const activeQId = (app.selectedQuestionId && app.selectedQuestionId !== "current")
+    ? app.selectedQuestionId
+    : currentQ?.id;
+  const activeQ = questions.find(q => q.id === activeQId) || currentQ;
+
+  let flowState = s;
+  let logState = s;
+
+  if (activeQ) {
+    if (activeQ.runId === s.runId) {
+      const slice = filterQuestionData({
+        questionId: activeQ.id,
+        questions,
+        events: s.log,
+        tasks: s.tasks,
+      });
+      flowState = { ...s, tasks: slice.tasks };
+      logState = { ...s, log: slice.log };
+    } else {
+      let pastState = app.cachedRunStates.get(activeQ.runId);
+      if (!pastState && app.cachedRunEvents.has(activeQ.runId)) {
+        const evts = app.cachedRunEvents.get(activeQ.runId);
+        if (evts) {
+          pastState = evts.reduce(reduce, initialState(app.roles));
+          app.cachedRunStates.set(activeQ.runId, pastState);
+        }
+      }
+      if (pastState) {
+        const slice = filterQuestionData({
+          questionId: activeQ.id,
+          questions,
+          events: pastState.log,
+          tasks: pastState.tasks,
+        });
+        flowState = { ...pastState, tasks: slice.tasks };
+        logState = { ...pastState, log: slice.log };
+      } else {
+        if (!app.cachedRunEvents.has(activeQ.runId)) {
+          app.cachedRunEvents.set(activeQ.runId, null);
+          api.events(activeQ.runId).then(evts => {
+            app.cachedRunEvents.set(activeQ.runId, evts);
+            el.flow.dataset.sig = "";
+            el.log.dataset.sig = "";
+            render();
+          }).catch(() => {
+            app.cachedRunEvents.set(activeQ.runId, []);
+          });
+        }
+        flowState = { ...s, tasks: {} };
+        logState = { ...s, log: [] };
+      }
+    }
+  }
+
+  if (app.tab === "flow") renderFlow(el.flow, flowState, { names: app.names, md });
+  if (app.tab === "log") renderLog(el.log, logState, { names: app.names, role: el.logRole.value, type: app.logType, highlight: app.selected });
+  el.logCount.textContent = logState.log.length ? String(logState.log.length) : "";
+  const nTasks = Object.keys(flowState.tasks).length;
   el.flowCount.textContent = nTasks ? String(nTasks) : "";
   const apSig = el.approvals.dataset.sig;
   renderApprovals(el.approvals, readOnly ? { approvals: {} } : s, { names: app.names, readOnly, onReply: replyApproval });
@@ -171,7 +241,7 @@ setInterval(() => {
   const s = current();
   if (!s || s.runStatus !== "active" || app.mode !== "live") return;
   renderNow(el.now, s, { names: app.names, replay: false });
-  if (app.tab === "flow") renderFlow(el.flow, s, { names: app.names, md });
+  if (app.tab === "flow") render();
 }, 1000);
 
 new ResizeObserver(() => fit(el.office)).observe(el.stage);
@@ -259,6 +329,9 @@ async function openWorkspace(id) {
   stopReplay();
   app.mode = "live";
   app.wsId = id;
+  app.selectedQuestionId = "current";
+  app.cachedRunEvents.clear();
+  app.cachedRunStates.clear();
   localStorageSet("ws", id);
   renderWorkspaceMenu();
   const cfg = await api.config(id);
@@ -598,6 +671,17 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
   for (const k of ["flow", "log"]) $(`#${k}`).dataset.sig = "";
   render();
 }));
+function onQuestionChange(val) {
+  app.selectedQuestionId = val;
+  if (el.flowQuestion) el.flowQuestion.value = val;
+  if (el.logQuestion) el.logQuestion.value = val;
+  el.flow.dataset.sig = "";
+  el.log.dataset.sig = "";
+  render();
+}
+el.flowQuestion?.addEventListener("change", ev => onQuestionChange(ev.target.value));
+el.logQuestion?.addEventListener("change", ev => onQuestionChange(ev.target.value));
+
 el.logRole.addEventListener("change", () => render());
 el.logType.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
   app.logType = b.dataset.v;

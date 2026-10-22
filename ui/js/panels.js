@@ -1,7 +1,7 @@
 // Panels: now strip, activity feed, chat, task flow, log, approvals, role drawer. All model text is escaped or Markdown-sanitised.
 import { sprite } from "./sprites.js";
 import { icon } from "./icons.js";
-import { activityFeed, duration, logGroup, overview } from "./derive.js";
+import { activityFeed, duration, logGroup, overview, STATUS_LABEL } from "./derive.js";
 import { esc, plain, summarize, time } from "./util.js";
 
 const who = (role, names) => role === "user" ? "Bạn" : role === "system" ? "Hệ thống" : names[role] ?? role;
@@ -43,7 +43,34 @@ export function renderNow(el, state, { names, replay, noWorkspace }) {
     ${waits}${appr}`;
 }
 
-/** Recent interactions, newest first. */
+/** Render <option> list for the question selector and sync selected state. */
+export function renderQuestionOptions(selectEl, questions, selectedId) {
+  if (!selectEl) return;
+  if (!questions || !questions.length) {
+    selectEl.innerHTML = `<option value="">(Chưa có câu hỏi)</option>`;
+    selectEl.disabled = true;
+    return;
+  }
+  selectEl.disabled = false;
+  const currentQ = questions.find(q => q.isCurrent) || questions[0];
+  const activeId = selectedId && (selectedId === "current" ? currentQ?.id : selectedId);
+
+  const html = questions.map(q => {
+    const statusText = STATUS_LABEL[q.status] ?? q.status;
+    const isSel = q.id === activeId || (!activeId && q.isCurrent);
+    return `<option value="${esc(q.id)}"${isSel ? " selected" : ""}>[${esc(statusText)}] ${esc(q.shortText)} · ${time(q.ts)}${q.isCurrent ? " (Hiện tại)" : ""}</option>`;
+  }).join("");
+
+  const sig = JSON.stringify(questions.map(q => [q.id, q.status, q.shortText, q.isCurrent])) + ":" + activeId;
+  if (selectEl.dataset.sig !== sig) {
+    selectEl.dataset.sig = sig;
+    selectEl.innerHTML = html;
+  }
+  if (activeId && selectEl.value !== activeId) {
+    selectEl.value = activeId;
+  }
+}
+
 export function renderFeed(el, state, { names }) {
   const sig = `${state.runId}:${state.log.length}`;
   if (el.dataset.sig === sig) return;
@@ -96,7 +123,7 @@ export function renderFlow(el, state, { names, md }) {
   if (el.dataset.sig === sig) return;
   el.dataset.sig = sig;
   if (!tasks.length) {
-    el.innerHTML = `<div class="empty"><p>Chưa có việc nào trong lần chạy này. Khi Manager chia việc, các bước sẽ hiện thành một cây ở đây.</p></div>`;
+    el.innerHTML = `<div class="empty"><p>Chưa có việc nào cho câu hỏi này. Khi Manager chia việc, các bước sẽ hiện thành một cây ở đây.</p></div>`;
     return;
   }
   const open = new Set([...el.querySelectorAll("details[open]")].map(d => d.dataset.id));
