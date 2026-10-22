@@ -2,10 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pickNativeFolder } from "../src/fs-browse.ts";
 
-test("pickNativeFolder (win32) returns selected path and name", async () => {
-  const mockExec = async (cmd: string, args: string[]) => {
+test("pickNativeFolder (win32) returns selected path and name with hidden console, topmost owner and timeout", async () => {
+  let capturedOptions: any = null;
+  const mockExec = async (cmd: string, args: string[], options?: any) => {
+    capturedOptions = options;
     assert.equal(cmd, "powershell");
-    assert.ok(args.some(a => a.includes("FolderBrowserDialog")));
+    // Verify hidden console flags
+    assert.ok(args.includes("-NonInteractive"));
+    assert.ok(args.includes("-WindowStyle"));
+    assert.ok(args.includes("Hidden"));
+    // Verify TopMost form owner
+    const script = args.find(a => a.includes("FolderBrowserDialog")) || "";
+    assert.ok(script.includes("$f = New-Object System.Windows.Forms.Form"));
+    assert.ok(script.includes("$f.TopMost = $true"));
+    assert.ok(script.includes(".ShowDialog($f)"));
     return { stdout: "C:\\projects\\my-agent-app\r\n", stderr: "" };
   };
 
@@ -13,6 +23,20 @@ test("pickNativeFolder (win32) returns selected path and name", async () => {
   assert.equal(res.canceled, false);
   assert.equal(res.name, "my-agent-app");
   assert.ok(res.path?.endsWith("my-agent-app"));
+  assert.equal(capturedOptions?.timeout, 120_000);
+});
+
+test("pickNativeFolder enforces 120s timeout and returns canceled if execution times out", async () => {
+  const mockExec = async (cmd: string, args: string[], options?: any) => {
+    assert.equal(options?.timeout, 120_000);
+    const err: any = new Error("timed out");
+    err.killed = true;
+    err.signal = "SIGTERM";
+    throw err;
+  };
+
+  const res = await pickNativeFolder(mockExec, "win32");
+  assert.deepEqual(res, { canceled: true });
 });
 
 test("pickNativeFolder (win32) returns canceled when dialog dismissed", async () => {

@@ -20,19 +20,21 @@ export function baseName(p: string): string {
 }
 
 export async function pickNativeFolder(
-  customExec?: (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }>,
+  customExec?: (file: string, args: string[], options?: any) => Promise<{ stdout: string; stderr: string }>,
   platform = process.platform,
 ): Promise<PickFolderResult> {
-  const run = customExec || defaultExecFile;
+  const run = (file: string, args: string[]) => (customExec || defaultExecFile)(file, args, { timeout: 120_000 });
   let rawPath = "";
 
   if (platform === "win32") {
     const psScript = [
       "Add-Type -AssemblyName System.Windows.Forms",
+      "$f = New-Object System.Windows.Forms.Form",
+      "$f.TopMost = $true",
       "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
       "$d.Description = 'Chọn thư mục workspace'",
       "$d.ShowNewFolderButton = $true",
-      "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "if ($d.ShowDialog($f) -eq [System.Windows.Forms.DialogResult]::OK) {",
       "  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
       "  [Console]::WriteLine($d.SelectedPath)",
       "}",
@@ -41,6 +43,9 @@ export async function pickNativeFolder(
     try {
       const { stdout } = await run("powershell", [
         "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
         "-Command",
         psScript,
       ]);
