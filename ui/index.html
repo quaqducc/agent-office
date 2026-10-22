@@ -132,10 +132,13 @@
 
       <!-- Bottom Panel (Flow & Log with Question Selectors) -->
       <div class="bottom-panel" id="bottom-panel">
+        <div class="bottom-panel-resizer" id="bottom-panel-resizer" title="Kéo để chỉnh độ cao"></div>
         <div class="bottom-panel-header">
           <nav class="bottom-tabs" role="tablist" aria-label="Bảng bên dưới">
             <button role="tab" id="bottom-tab-flow" data-bottom-tab="flow" class="bottom-tab on" aria-selected="true"><i data-icon="flow"></i>Luồng việc <span id="flow-count" class="count"></span></button>
             <button role="tab" id="bottom-tab-log" data-bottom-tab="log" class="bottom-tab" aria-selected="false"><i data-icon="log"></i>Nhật ký <span id="log-count" class="count"></span></button>
+            <button role="tab" id="bottom-tab-commands" data-bottom-tab="commands" class="bottom-tab" aria-selected="false"><i data-icon="terminal"></i>Lệnh <span id="commands-count" class="count"></span></button>
+            <button role="tab" id="bottom-tab-tests" data-bottom-tab="tests" class="bottom-tab" aria-selected="false"><i data-icon="checkCircle"></i>Kết quả test <span id="tests-badge" class="badge"></span></button>
           </nav>
           <div class="bottom-panel-actions">
             <button id="bottom-panel-close" class="icon-btn small" type="button" title="Thu gọn bảng (Ctrl+J)" aria-label="Thu gọn"><i data-icon="x"></i></button>
@@ -167,6 +170,23 @@
             </div>
             <div id="log" class="log"></div>
           </div>
+
+          <div class="bottom-tab-panel" id="panel-commands" data-panel="commands" hidden>
+            <div class="panel-toolbar">
+              <label class="question-bar"><span>Câu hỏi:</span><select id="commands-question" class="select question-select" aria-label="Chọn câu hỏi trong Nhật ký lệnh"></select></label>
+              <div class="commands-filters">
+                <select id="commands-role" class="select" aria-label="Lọc theo role"><option value="">Mọi người</option></select>
+              </div>
+            </div>
+            <div id="commands-list" class="commands-list"></div>
+          </div>
+
+          <div class="bottom-tab-panel" id="panel-tests" data-panel="tests" hidden>
+            <div class="panel-toolbar">
+              <label class="question-bar"><span>Câu hỏi:</span><select id="tests-question" class="select question-select" aria-label="Chọn câu hỏi trong Kết quả test"></select></label>
+            </div>
+            <div id="tests-content" class="tests-content"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -195,6 +215,7 @@
   </div>
 
   <dialog id="ask" class="ask"></dialog>
+  <dialog id="command-modal" class="ask modal-dialog" aria-label="Toàn bộ output của lệnh"></dialog>
   <dialog id="setup" class="ask sheet setup" aria-label="Kết nối model AI"></dialog>
   <dialog id="settings" class="ask sheet"></dialog>
   <dialog id="store" class="ask sheet wide"></dialog>

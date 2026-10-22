@@ -1,7 +1,7 @@
 // Panels: now strip, activity feed, chat, task flow, log, approvals, role drawer. All model text is escaped or Markdown-sanitised.
 import { sprite } from "./sprites.js";
 import { icon } from "./icons.js";
-import { activityFeed, duration, logGroup, overview, STATUS_LABEL } from "./derive.js";
+import { activityFeed, duration, logGroup, overview, STATUS_LABEL, parseTestOutput } from "./derive.js";
 import { esc, plain, summarize, time } from "./util.js";
 
 const who = (role, names) => role === "user" ? "Bạn" : role === "system" ? "Hệ thống" : names[role] ?? role;
@@ -250,4 +250,90 @@ export function renderDrawer(el, role, state, { names, meta, md, dept }) {
     ${checkpoints.length ? `<h3 class="section-title">Checkpoint</h3>${checkpoints.map(e => `<div class="item"><div class="meta">${time(e.ts)} · ${e.type === "approval_request" ? "cần duyệt" : "báo cáo"}</div><b>${esc(e.data.title)}</b>${e.data.summary ? `<br>${esc(e.data.summary)}` : ""}</div>`).join("")}` : ""}
     <h3 class="section-title">Công cụ đã dùng <span class="count">${tools.length}</span></h3>
     ${tools.map(e => `<div class="item tool"><div class="meta">${time(e.ts)}</div><code>${esc(e.data.tool)}</code> <span class="args">${esc(JSON.stringify(e.data.args ?? {}))}</span></div>`).join("") || `<p class="none">Chưa dùng công cụ nào.</p>`}`;
+}
+
+/** Render Command Log list in Bottom Panel */
+export function renderCommands(el, commands, { names, onShowModal, roleFilter = "" } = {}) {
+  const filtered = roleFilter ? commands.filter(c => c.role === roleFilter) : commands;
+  if (!filtered.length) {
+    el.innerHTML = `<div class="command-empty">Chưa có câu lệnh shell nào được thực thi trong phạm vi này.</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(c => {
+    const isRunning = c.ok === undefined;
+    const dotCls = isRunning ? "running" : (c.ok ? "ok" : "fail");
+    const durText = c.durationMs != null ? duration(c.durationMs) : (isRunning ? "đang chạy…" : "");
+    const roleName = who(c.role, names);
+    const previewText = c.preview ? esc(c.preview) : (isRunning ? "Đang chờ output…" : "(Không có output)");
+
+    return `<div class="command-row" data-id="${esc(c.id)}">
+      <div class="command-row-header" title="Bấm để xem toàn bộ output">
+        <span class="command-status-dot ${dotCls}"></span>
+        <span class="command-role-badge">${esc(roleName)}</span>
+        <span class="command-text">${esc(c.command)}</span>
+        ${durText ? `<span class="command-duration">${esc(durText)}</span>` : ""}
+      </div>
+      <div class="command-preview">${previewText}</div>
+    </div>`;
+  }).join("");
+
+  el.querySelectorAll(".command-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const id = row.dataset.id;
+      const cmd = filtered.find(c => c.id === id);
+      if (cmd && onShowModal) {
+        onShowModal(cmd);
+      }
+    });
+  });
+}
+
+/** Render Test Results summary and cases in Bottom Panel */
+export function renderTests(el, testCommands, { onShowModal } = {}) {
+  if (!testCommands || !testCommands.length) {
+    el.innerHTML = `<div class="tests-empty">Chưa phát hiện lần chạy test nào (npm test, pytest, node --test).</div>`;
+    return;
+  }
+
+  const latestCmd = testCommands[testCommands.length - 1];
+  const summary = parseTestOutput(latestCmd.command, latestCmd.output || latestCmd.preview);
+  const isPass = summary.passed;
+  const bannerCls = isPass ? "pass" : "fail";
+  const bannerTitle = isPass ? "TẤT CẢ BÀI TEST ĐÃ ĐẠT" : "CÓ BÀI TEST THẤT BẠI";
+  const stats = summary.stats;
+
+  const casesHtml = summary.cases.length > 0 ? `
+    <div class="test-cases-list">
+      ${summary.cases.map(c => `
+        <div class="test-case-item ${c.passed ? "pass" : "fail"}">
+          <span class="test-case-icon ${c.passed ? "pass" : "fail"}">${c.passed ? "✔" : "✖"}</span>
+          <span class="test-case-name">${esc(c.name)}</span>
+          ${c.durationMs != null ? `<span class="test-case-dur">${c.durationMs}ms</span>` : ""}
+        </div>
+      `).join("")}
+    </div>
+  ` : "";
+
+  const rawHtml = `
+    <details class="test-raw-details">
+      <summary>Xem chi tiết raw output (${esc(latestCmd.command)})</summary>
+      <pre class="test-raw-pre"><code>${esc(latestCmd.output || latestCmd.preview || "(Không có output)")}</code></pre>
+    </details>
+  `;
+
+  el.innerHTML = `
+    <div class="test-summary-banner ${bannerCls}">
+      <span>${bannerTitle} (${esc(summary.framework)})</span>
+      <div class="test-stats-chips">
+        <span>Tổng: <b>${stats.total}</b></span>
+        <span style="color:#2ea043">Đạt: <b>${stats.passed}</b></span>
+        ${stats.failed > 0 ? `<span style="color:#f85149">Lỗi: <b>${stats.failed}</b></span>` : ""}
+        ${stats.skipped > 0 ? `<span style="color:var(--muted)">Bỏ qua: <b>${stats.skipped}</b></span>` : ""}
+        ${stats.durationMs != null ? `<span>Thời gian: <b>${duration(stats.durationMs)}</b></span>` : ""}
+      </div>
+    </div>
+    ${casesHtml}
+    ${rawHtml}
+  `;
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 // @ts-ignore -- browser ES modules without type declarations
 import { initialState, reduce } from "../ui/js/state.js";
 // @ts-ignore
-import { activeLinks, activityFeed, duration, logGroup, overview, extractQuestions, filterQuestionData } from "../ui/js/derive.js";
+import { activeLinks, activityFeed, duration, logGroup, overview, extractQuestions, filterQuestionData, extractCommands, isTestCommand, parseTestOutput } from "../ui/js/derive.js";
 
 let seq = 0;
 const ev = (type: string, data: Record<string, unknown> = {}, role?: string, taskId?: string) =>
@@ -188,4 +188,26 @@ test("filterQuestionData returns all tasks and events when run has only one ques
   const slice = filterQuestionData({ questionId: "r1:seq-1", questions, events, tasks });
   assert.equal(slice.log.length, 2);
   assert.deepEqual(Object.keys(slice.tasks), ["t1"]);
+});
+
+test("ui/js/derive extractCommands, isTestCommand, and parseTestOutput", () => {
+  const events = [
+    { type: "tool_call", seq: 1, runId: "r1", role: "developer", ts: "2026-10-24T10:00:00.000Z", data: { tool: "bash", toolCallId: "c1", args: { command: "npm test" } } },
+    { type: "tool_result", seq: 2, runId: "r1", role: "developer", ts: "2026-10-24T10:00:01.500Z", data: { tool: "bash", toolCallId: "c1", ok: true, preview: "ℹ tests 1\nℹ pass 1" } },
+  ];
+
+  const cmds = extractCommands(events);
+  assert.equal(cmds.length, 1);
+  assert.equal(cmds[0].command, "npm test");
+  assert.equal(cmds[0].ok, true);
+  assert.equal(cmds[0].durationMs, 1500);
+
+  assert.equal(isTestCommand("npm test"), true);
+  assert.equal(isTestCommand("ls -la"), false);
+
+  const testSummary = parseTestOutput(cmds[0].command, cmds[0].preview);
+  assert.equal(testSummary.isTestCommand, true);
+  assert.equal(testSummary.passed, true);
+  assert.equal(testSummary.stats.total, 1);
+  assert.equal(testSummary.stats.passed, 1);
 });

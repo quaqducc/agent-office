@@ -6,8 +6,8 @@ import { initialState, mergeEvents, reduce } from "./state.js";
 import { cancelAllWalks, fit, pauseAllWalks, playEffect, renderOffice, resumeAllWalks } from "./office.js";
 import { deskLayout } from "./layout.js";
 import { icon } from "./icons.js";
-import { duration, extractQuestions, filterQuestionData } from "./derive.js";
-import { renderApprovals, renderChat, renderDrawer, renderFeed, renderFlow, renderLog, renderNow, renderQuestionOptions, runLabel } from "./panels.js";
+import { duration, extractQuestions, filterQuestionData, extractCommands, isTestCommand, parseTestOutput } from "./derive.js";
+import { renderApprovals, renderChat, renderDrawer, renderFeed, renderFlow, renderLog, renderNow, renderQuestionOptions, runLabel, renderCommands, renderTests } from "./panels.js";
 import { esc } from "./util.js";
 import { openSettings, showSetup } from "./settings.js";
 import { openStore } from "./store.js";
@@ -33,8 +33,16 @@ const el = {
   sidebarChanges: $("#sidebar-changes"), changesRefresh: $("#changes-refresh"),
   changesRunSelect: $("#changes-run-select"), changesFileList: $("#changes-file-list"),
   editorTabs: $("#editor-tabs"), viewOffice: $("#view-office"), viewEditor: $("#view-editor"),
-  bottomPanel: $("#bottom-panel"), bottomTabFlow: $("#bottom-tab-flow"), bottomTabLog: $("#bottom-tab-log"),
-  panelFlow: $("#panel-flow"), panelLog: $("#panel-log"), bottomPanelClose: $("#bottom-panel-close"),
+  bottomPanel: $("#bottom-panel"), bottomPanelResizer: $("#bottom-panel-resizer"),
+  bottomTabFlow: $("#bottom-tab-flow"), bottomTabLog: $("#bottom-tab-log"),
+  bottomTabCommands: $("#bottom-tab-commands"), bottomTabTests: $("#bottom-tab-tests"),
+  panelFlow: $("#panel-flow"), panelLog: $("#panel-log"),
+  panelCommands: $("#panel-commands"), panelTests: $("#panel-tests"),
+  bottomPanelClose: $("#bottom-panel-close"),
+  commandsCount: $("#commands-count"), testsBadge: $("#tests-badge"),
+  commandsQuestion: $("#commands-question"), testsQuestion: $("#tests-question"),
+  commandsRole: $("#commands-role"), commandsList: $("#commands-list"),
+  testsContent: $("#tests-content"), commandModal: $("#command-modal"),
   sideChat: $("#side-chat"), sideChatClose: $("#side-chat-close"),
 };
 
@@ -197,6 +205,8 @@ function draw() {
   });
   renderQuestionOptions(el.flowQuestion, questions, app.selectedQuestionId);
   renderQuestionOptions(el.logQuestion, questions, app.selectedQuestionId);
+  renderQuestionOptions(el.commandsQuestion, questions, app.selectedQuestionId);
+  renderQuestionOptions(el.testsQuestion, questions, app.selectedQuestionId);
 
   const currentQ = questions.find(q => q.isCurrent) || questions[0];
   const activeQId = (app.selectedQuestionId && app.selectedQuestionId !== "current")
@@ -253,8 +263,27 @@ function draw() {
     }
   }
 
+  // Commands and Tests derivation
+  const commands = extractCommands(logState.log);
+  const testCommands = commands.filter(c => isTestCommand(c.command));
+
+  if (el.commandsCount) el.commandsCount.textContent = commands.length ? String(commands.length) : "";
+  if (el.testsBadge) {
+    if (testCommands.length > 0) {
+      const latestTest = testCommands[testCommands.length - 1];
+      const testSummary = parseTestOutput(latestTest.command, latestTest.output || latestTest.preview);
+      el.testsBadge.textContent = testSummary.passed ? "PASS" : "FAIL";
+      el.testsBadge.className = "badge " + (testSummary.passed ? "pass" : "fail");
+    } else {
+      el.testsBadge.textContent = "";
+      el.testsBadge.className = "badge";
+    }
+  }
+
   if (app.tab === "flow") renderFlow(el.flow, flowState, { names: app.names, md });
   if (app.tab === "log") renderLog(el.log, logState, { names: app.names, role: el.logRole.value, type: app.logType, highlight: app.selected });
+  if (app.tab === "commands") renderCommands(el.commandsList, commands, { names: app.names, onShowModal: showCommandModal, roleFilter: el.commandsRole?.value });
+  if (app.tab === "tests") renderTests(el.testsContent, testCommands, { onShowModal: showCommandModal });
   el.logCount.textContent = logState.log.length ? String(logState.log.length) : "";
   const nTasks = Object.keys(flowState.tasks).length;
   el.flowCount.textContent = nTasks ? String(nTasks) : "";
@@ -303,8 +332,10 @@ function closeDrawer() {
 function setRoles(roles) {
   app.roles = roles;
   app.dept = Object.fromEntries(deskLayout(roles, app.rooms).map(d => [d.role, d.dept]));
-  el.logRole.innerHTML = `<option value="">Mọi người</option><option value="user">Bạn</option>` +
+  const roleOpts = `<option value="">Mọi người</option><option value="user">Bạn</option>` +
     roles.map(r => `<option value="${esc(r)}">${esc(app.names[r] ?? r)}</option>`).join("");
+  el.logRole.innerHTML = roleOpts;
+  if (el.commandsRole) el.commandsRole.innerHTML = roleOpts;
 }
 
 function renderWorkspaceMenu() {
@@ -775,29 +806,106 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
 }));
 
 // Bottom panel tabs
-el.bottomTabFlow?.addEventListener("click", () => {
-  app.tab = "flow";
-  el.bottomTabFlow.classList.add("on");
-  el.bottomTabFlow.setAttribute("aria-selected", "true");
-  el.bottomTabLog.classList.remove("on");
-  el.bottomTabLog.setAttribute("aria-selected", "false");
-  el.panelFlow.hidden = false;
-  el.panelLog.hidden = true;
-  el.flow.dataset.sig = "";
+function selectBottomTab(tabName) {
+  app.tab = tabName;
+  const tabs = [
+    { name: "flow", tabEl: el.bottomTabFlow, panelEl: el.panelFlow },
+    { name: "log", tabEl: el.bottomTabLog, panelEl: el.panelLog },
+    { name: "commands", tabEl: el.bottomTabCommands, panelEl: el.panelCommands },
+    { name: "tests", tabEl: el.bottomTabTests, panelEl: el.panelTests },
+  ];
+  for (const t of tabs) {
+    const isCur = t.name === tabName;
+    t.tabEl?.classList.toggle("on", isCur);
+    t.tabEl?.setAttribute("aria-selected", String(isCur));
+    if (t.panelEl) t.panelEl.hidden = !isCur;
+  }
+  if (el.flow) el.flow.dataset.sig = "";
+  if (el.log) el.log.dataset.sig = "";
   render();
-});
+}
 
-el.bottomTabLog?.addEventListener("click", () => {
-  app.tab = "log";
-  el.bottomTabLog.classList.add("on");
-  el.bottomTabLog.setAttribute("aria-selected", "true");
-  el.bottomTabFlow.classList.remove("on");
-  el.bottomTabFlow.setAttribute("aria-selected", "false");
-  el.panelLog.hidden = false;
-  el.panelFlow.hidden = true;
-  el.log.dataset.sig = "";
-  render();
-});
+el.bottomTabFlow?.addEventListener("click", () => selectBottomTab("flow"));
+el.bottomTabLog?.addEventListener("click", () => selectBottomTab("log"));
+el.bottomTabCommands?.addEventListener("click", () => selectBottomTab("commands"));
+el.bottomTabTests?.addEventListener("click", () => selectBottomTab("tests"));
+
+function initBottomPanelResizer() {
+  const resizer = el.bottomPanelResizer;
+  if (!resizer || !el.bottomPanel) return;
+
+  const savedHeight = localStorage.getItem("bottom-panel-height");
+  if (savedHeight) {
+    el.bottomPanel.style.height = savedHeight;
+  }
+
+  let startY = 0;
+  let startHeight = 0;
+
+  function onMouseMove(e) {
+    const dy = startY - e.clientY;
+    const newHeight = Math.min(Math.max(startHeight + dy, 100), Math.min(window.innerHeight * 0.7, 600));
+    el.bottomPanel.style.height = `${newHeight}px`;
+    localStorage.setItem("bottom-panel-height", `${newHeight}px`);
+  }
+
+  function onMouseUp() {
+    document.body.classList.remove("resizing");
+    resizer.classList.remove("resizing");
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  }
+
+  resizer.addEventListener("mousedown", (e) => {
+    startY = e.clientY;
+    startHeight = el.bottomPanel.getBoundingClientRect().height;
+    document.body.classList.add("resizing");
+    resizer.classList.add("resizing");
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    e.preventDefault();
+  });
+}
+initBottomPanelResizer();
+
+function showCommandModal(cmd) {
+  if (!el.commandModal) return;
+  const raw = cmd.output || cmd.preview || "(Không có nội dung output)";
+  const isRunning = cmd.ok === undefined;
+  const statusText = isRunning ? "Đang chạy" : (cmd.ok ? "Thành công (exit code: " + (cmd.exitCode ?? 0) + ")" : "Thất bại (exit code: " + (cmd.exitCode ?? 1) + ")");
+
+  el.commandModal.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="margin:0;font-size:15px;display:flex;align-items:center;gap:8px;">
+        ${icon("terminal")} Chi tiết lệnh
+      </h3>
+      <button class="icon-btn small modal-close" type="button" aria-label="Đóng"><i data-icon="x"></i></button>
+    </div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted);">
+      <b>Role:</b> ${esc(who(cmd.role, app.names))} · <b>Trạng thái:</b> ${esc(statusText)}
+    </div>
+    <div style="background:var(--panel-3);padding:8px;border-radius:4px;font-family:var(--font-mono);font-size:12px;margin-bottom:12px;word-break:break-all;">
+      $ ${esc(cmd.command)}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <span style="font-size:12px;font-weight:600;">Output:</span>
+      <button class="btn copy-btn" type="button" style="font-size:11px;padding:3px 8px;">Sao chép</button>
+    </div>
+    <pre style="background:var(--panel-2);border:1px solid var(--line-2);padding:10px;border-radius:4px;font-family:var(--font-mono);font-size:12px;max-height:360px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;"><code>${esc(raw)}</code></pre>
+  `;
+
+  el.commandModal.querySelector(".modal-close")?.addEventListener("click", () => el.commandModal.close());
+  el.commandModal.querySelector(".copy-btn")?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(raw);
+      toast("Đã sao chép output vào clipboard", "ok");
+    } catch {
+      toast("Không thể sao chép tự động", "bad");
+    }
+  });
+
+  el.commandModal.showModal();
+}
 
 function showExplorerSidebar() {
   if (el.sidebarExplorer.hidden) {
@@ -1004,14 +1112,19 @@ function onQuestionChange(val) {
   app.selectedQuestionId = val;
   if (el.flowQuestion) el.flowQuestion.value = val;
   if (el.logQuestion) el.logQuestion.value = val;
+  if (el.commandsQuestion) el.commandsQuestion.value = val;
+  if (el.testsQuestion) el.testsQuestion.value = val;
   el.flow.dataset.sig = "";
   el.log.dataset.sig = "";
   render();
 }
 el.flowQuestion?.addEventListener("change", ev => onQuestionChange(ev.target.value));
 el.logQuestion?.addEventListener("change", ev => onQuestionChange(ev.target.value));
+el.commandsQuestion?.addEventListener("change", ev => onQuestionChange(ev.target.value));
+el.testsQuestion?.addEventListener("change", ev => onQuestionChange(ev.target.value));
 
 el.logRole.addEventListener("change", () => render());
+el.commandsRole?.addEventListener("change", () => render());
 el.logType.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
   app.logType = b.dataset.v;
   el.logType.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));

@@ -258,3 +258,231 @@ const GROUPS = {
 };
 /** Log filter category of an event type. */
 export const logGroup = type => Object.keys(GROUPS).find(g => GROUPS[g].includes(type)) ?? "system";
+
+const TEST_CMD_RE = /\b(npm\s+(test|t|run\s+test)|node\s+.*--test|pytest|python\s+.*-m\s+pytest|vitest|jest|mocha|cargo\s+test|go\s+test)\b/i;
+
+export function isTestCommand(command) {
+  return TEST_CMD_RE.test(command || "");
+}
+
+const MAX_OUTPUT_BYTES = 50000;
+
+export function extractCommands(events = []) {
+  const commandsMap = new Map();
+  const order = [];
+
+  for (const e of events) {
+    if (!e || typeof e !== "object") continue;
+
+    if (e.type === "tool_call" && (e.data?.tool === "bash" || e.data?.tool === "powershell")) {
+      const id = String(e.data.toolCallId || e.seq || Math.random());
+      const cmdText = String(e.data.args?.command || "").trim();
+      const entry = {
+        id,
+        runId: e.runId,
+        role: e.role || "unknown",
+        command: cmdText,
+        tool: e.data.tool,
+        timestamp: e.ts || new Date().toISOString(),
+        preview: "",
+        output: "",
+      };
+      commandsMap.set(id, entry);
+      order.push(id);
+    } else if (e.type === "tool_result" && (e.data?.tool === "bash" || e.data?.tool === "powershell")) {
+      const id = String(e.data.toolCallId || "");
+      const entry = commandsMap.get(id);
+      if (entry) {
+        entry.ok = e.data.ok;
+        if (e.data.exitCode != null) {
+          entry.exitCode = Number(e.data.exitCode);
+        } else if (e.data.ok !== undefined) {
+          entry.exitCode = e.data.ok ? 0 : 1;
+        }
+
+        let rawOutput = String(e.data.output || e.data.preview || "");
+        if (rawOutput.length > MAX_OUTPUT_BYTES) {
+          rawOutput = rawOutput.slice(0, MAX_OUTPUT_BYTES) + "\n...[truncated at 50KB]";
+        }
+        entry.output = rawOutput;
+        entry.preview = String(e.data.preview || rawOutput.slice(0, 300));
+
+        if (e.ts && entry.timestamp) {
+          const start = Date.parse(entry.timestamp);
+          const end = Date.parse(e.ts);
+          if (!isNaN(start) && !isNaN(end) && end >= start) {
+            entry.durationMs = end - start;
+          }
+        }
+      }
+    }
+  }
+
+  return order.map(id => commandsMap.get(id));
+}
+
+export function parseTestOutput(command, output) {
+  const isCmdTest = isTestCommand(command);
+  const out = output || "";
+
+  const hasNodeTestIndicators = /ℹ tests \d+|TAP version \d+|# tests \d+/m.test(out);
+  const hasPytestIndicators = /===+ test session starts ===+|===+ \d+ passed/m.test(out);
+
+  if (!isCmdTest && !hasNodeTestIndicators && !hasPytestIndicators) {
+    return {
+      isTestCommand: false,
+      framework: "generic",
+      passed: false,
+      stats: { total: 0, passed: 0, failed: 0, skipped: 0 },
+      cases: [],
+      rawOutput: out,
+    };
+  }
+
+  if (/ℹ tests \d+|[✔✖]\s+.+\([\d.]+m?s\)/m.test(out)) {
+    const summary = parseNodeTestSpec(out);
+    if (summary) return summary;
+  }
+
+  if (/TAP version \d+|^\s*(ok|not ok)\s+\d+\s*-/m.test(out)) {
+    const summary = parseNodeTestTap(out);
+    if (summary) return summary;
+  }
+
+  if (hasPytestIndicators || /::\S+\s+(PASSED|FAILED|SKIPPED)/m.test(out)) {
+    const summary = parsePytest(out);
+    if (summary) return summary;
+  }
+
+  const passed = !/\b(fail|failed|failure|ERR|AssertionError)\b/i.test(out);
+  return {
+    isTestCommand: true,
+    framework: "generic",
+    passed,
+    stats: { total: 0, passed: passed ? 1 : 0, failed: passed ? 0 : 1, skipped: 0 },
+    cases: [],
+    rawOutput: out,
+  };
+}
+
+function parseNodeTestSpec(out) {
+  const cases = [];
+  const lines = out.split("\n");
+  const caseRegex = /^\s*([✔✖])\s+(.+?)(?:\s+\(([\d.]+)m?s\))?$/;
+
+  for (const line of lines) {
+    const m = line.match(caseRegex);
+    if (m) {
+      cases.push({ name: m[2].trim(), passed: m[1] === "✔", durationMs: m[3] ? parseFloat(m[3]) : undefined });
+    }
+  }
+
+  let total = 0, passed = 0, failed = 0, skipped = 0, durationMs;
+  const totalMatch = out.match(/ℹ tests\s+(\d+)/);
+  if (totalMatch) total = parseInt(totalMatch[1], 10);
+  const passMatch = out.match(/ℹ pass\s+(\d+)/);
+  if (passMatch) passed = parseInt(passMatch[1], 10);
+  const failMatch = out.match(/ℹ fail\s+(\d+)/);
+  if (failMatch) failed = parseInt(failMatch[1], 10);
+  const skipMatch = out.match(/ℹ skipped\s+(\d+)/);
+  if (skipMatch) skipped = parseInt(skipMatch[1], 10);
+  const durMatch = out.match(/ℹ duration_ms\s+([\d.]+)/);
+  if (durMatch) durationMs = parseFloat(durMatch[1]);
+
+  if (!total && cases.length > 0) {
+    total = cases.length;
+    passed = cases.filter(c => c.passed).length;
+    failed = cases.filter(c => !c.passed).length;
+  }
+
+  return {
+    isTestCommand: true,
+    framework: "node:test",
+    passed: failed === 0 && total > 0,
+    stats: { total, passed, failed, skipped, durationMs },
+    cases,
+    rawOutput: out,
+  };
+}
+
+function parseNodeTestTap(out) {
+  const cases = [];
+  const lines = out.split("\n");
+  const tapLineRegex = /^\s*(ok|not ok)\s+\d+\s*-\s*([^#]+)(?:#\s*(.+))?$/;
+
+  for (const line of lines) {
+    const m = line.match(tapLineRegex);
+    if (m) {
+      cases.push({ name: m[2].trim(), passed: m[1] === "ok" });
+    }
+  }
+
+  let total = 0, passed = 0, failed = 0, skipped = 0;
+  const totalMatch = out.match(/# tests\s+(\d+)/);
+  if (totalMatch) total = parseInt(totalMatch[1], 10);
+  const passMatch = out.match(/# pass\s+(\d+)/);
+  if (passMatch) passed = parseInt(passMatch[1], 10);
+  const failMatch = out.match(/# fail\s+(\d+)/);
+  if (failMatch) failed = parseInt(failMatch[1], 10);
+  const skipMatch = out.match(/# skipped\s+(\d+)/);
+  if (skipMatch) skipped = parseInt(skipMatch[1], 10);
+
+  if (!total && cases.length > 0) {
+    total = cases.length;
+    passed = cases.filter(c => c.passed).length;
+    failed = cases.filter(c => !c.passed).length;
+  }
+
+  return {
+    isTestCommand: true,
+    framework: "node:test",
+    passed: failed === 0 && total > 0,
+    stats: { total, passed, failed, skipped },
+    cases,
+    rawOutput: out,
+  };
+}
+
+function parsePytest(out) {
+  const cases = [];
+  const lines = out.split("\n");
+  const caseRegex = /^(\S+::\S+)\s+(PASSED|FAILED|SKIPPED)/;
+
+  for (const line of lines) {
+    const m = line.match(caseRegex);
+    if (m) {
+      cases.push({ name: m[1], passed: m[2] === "PASSED" });
+    }
+  }
+
+  let total = 0, passed = 0, failed = 0, skipped = 0, durationMs;
+  const collectedMatch = out.match(/collected\s+(\d+)\s+items/);
+  if (collectedMatch) total = parseInt(collectedMatch[1], 10);
+
+  const summaryMatch = out.match(/===+\s*(.+?)\s+in\s+([\d.]+)s\s*===+/);
+  if (summaryMatch) {
+    const summaryText = summaryMatch[1];
+    durationMs = parseFloat(summaryMatch[2]) * 1000;
+    const pMatch = summaryText.match(/(\d+)\s+passed/);
+    if (pMatch) passed = parseInt(pMatch[1], 10);
+    const fMatch = summaryText.match(/(\d+)\s+failed/);
+    if (fMatch) failed = parseInt(fMatch[1], 10);
+    const sMatch = summaryText.match(/(\d+)\s+skipped/);
+    if (sMatch) skipped = parseInt(sMatch[1], 10);
+  }
+
+  if (!total && cases.length > 0) {
+    total = cases.length;
+    passed = cases.filter(c => c.passed).length;
+    failed = cases.filter(c => !c.passed).length;
+  }
+
+  return {
+    isTestCommand: true,
+    framework: "pytest",
+    passed: failed === 0 && total > 0,
+    stats: { total, passed, failed, skipped, durationMs },
+    cases,
+    rawOutput: out,
+  };
+}
