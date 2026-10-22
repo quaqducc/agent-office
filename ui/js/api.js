@@ -37,6 +37,10 @@ export const api = {
   deleteQueueItem: (id, qid) => call("DELETE", `/workspaces/${enc(id)}/queue/${enc(qid)}`),
   tree: (workspaceId, subpath = ".", depth = 1) => call("GET", `/workspaces/${enc(workspaceId)}/tree?path=${enc(subpath)}&depth=${depth}`),
   file: (workspaceId, subpath) => call("GET", `/workspaces/${enc(workspaceId)}/files?path=${enc(subpath)}`),
+  saveFile: (workspaceId, path, content, expectedSha256, force = false) =>
+    call("PUT", `/workspaces/${enc(workspaceId)}/files`, { path, content, expectedSha256, force }),
+  createFile: (workspaceId, path, content = "") =>
+    call("POST", `/workspaces/${enc(workspaceId)}/files`, { path, content }),
   health: () => call("GET", "/health"),
   settings: () => call("GET", "/settings"),
   saveSettings: c => call("PUT", "/settings", c),

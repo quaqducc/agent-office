@@ -31,6 +31,18 @@ export interface FileReadResult {
   isBinary: boolean;
 }
 
+export interface SaveFileOptions {
+  expectedSha256?: string;
+  force?: boolean;
+}
+
+export interface FileWriteResult {
+  path: string;
+  sha256: string;
+  mtime: string;
+  size: number;
+}
+
 const SENSITIVE_DIRS = new Set([
   ".company",
   ".git",
@@ -218,5 +230,110 @@ export async function readWorkspaceFile(wsPath: string, subpath: string): Promis
     mtime: stat.mtime.toISOString(),
     size: stat.size,
     isBinary,
+  };
+}
+
+/** Saves content to an existing text file atomically, preserving line-endings and checking 409 conflict. */
+export async function saveWorkspaceFile(
+  wsPath: string,
+  subpath: string,
+  content: string,
+  options: SaveFileOptions = {},
+): Promise<FileWriteResult> {
+  const fullPath = assertSafeWorkspacePath(wsPath, subpath);
+  if (!existsSync(fullPath)) {
+    throw new HttpError(404, "file not found");
+  }
+  const stat = await fs.stat(fullPath);
+  if (stat.isDirectory()) {
+    throw new HttpError(400, "path is a directory");
+  }
+  if (stat.size > 2 * 1024 * 1024) {
+    throw new HttpError(413, "File exceeds 2MB limit");
+  }
+
+  const existingBuf = await fs.readFile(fullPath);
+  const sampleLength = Math.min(existingBuf.length, 512);
+  for (let i = 0; i < sampleLength; i++) {
+    if (existingBuf[i] === 0x00) {
+      throw new HttpError(400, "Cannot edit binary file");
+    }
+  }
+
+  const currentSha256 = crypto.createHash("sha256").update(existingBuf).digest("hex");
+  if (options.expectedSha256 && currentSha256 !== options.expectedSha256 && !options.force) {
+    throw new HttpError(409, "File has been modified on disk", {
+      diskContent: existingBuf.toString("utf-8"),
+      diskSha256: currentSha256,
+      diskMtime: stat.mtime.toISOString(),
+    });
+  }
+
+  // Preserve CRLF vs LF
+  const hasCrlf = existingBuf.includes(Buffer.from("\r\n"));
+  const finalContent = hasCrlf ? content.replace(/\r?\n/g, "\r\n") : content.replace(/\r\n/g, "\n");
+
+  const dir = path.dirname(fullPath);
+  const tmpName = `.${path.basename(fullPath)}.tmp.${Date.now()}.${crypto.randomUUID().slice(0, 6)}`;
+  const tmpPath = path.join(dir, tmpName);
+
+  try {
+    await fs.writeFile(tmpPath, finalContent, "utf-8");
+    await fs.rename(tmpPath, fullPath);
+  } catch (err) {
+    try { await fs.rm(tmpPath, { force: true }); } catch {}
+    throw err;
+  }
+
+  const newStat = await fs.stat(fullPath);
+  const newBuf = Buffer.from(finalContent, "utf-8");
+  const newSha256 = crypto.createHash("sha256").update(newBuf).digest("hex");
+  const root = path.resolve(wsPath);
+  const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+
+  return {
+    path: relPath,
+    sha256: newSha256,
+    mtime: newStat.mtime.toISOString(),
+    size: newStat.size,
+  };
+}
+
+/** Creates a new file atomically inside the workspace, creating parent directories if needed. */
+export async function createWorkspaceFile(
+  wsPath: string,
+  subpath: string,
+  content: string = "",
+): Promise<FileWriteResult> {
+  const fullPath = assertSafeWorkspacePath(wsPath, subpath);
+  if (existsSync(fullPath)) {
+    throw new HttpError(409, "File already exists");
+  }
+
+  const dir = path.dirname(fullPath);
+  await fs.mkdir(dir, { recursive: true });
+
+  const tmpName = `.${path.basename(fullPath)}.tmp.${Date.now()}.${crypto.randomUUID().slice(0, 6)}`;
+  const tmpPath = path.join(dir, tmpName);
+
+  try {
+    await fs.writeFile(tmpPath, content, "utf-8");
+    await fs.rename(tmpPath, fullPath);
+  } catch (err) {
+    try { await fs.rm(tmpPath, { force: true }); } catch {}
+    throw err;
+  }
+
+  const stat = await fs.stat(fullPath);
+  const buf = Buffer.from(content, "utf-8");
+  const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+  const root = path.resolve(wsPath);
+  const relPath = path.relative(root, fullPath).replace(/\\/g, "/");
+
+  return {
+    path: relPath,
+    sha256,
+    mtime: stat.mtime.toISOString(),
+    size: stat.size,
   };
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startServer, type ServerOptions } from "../src/server.ts";
@@ -680,6 +680,91 @@ test("ide endpoints: GET /tree và GET /files", async () => {
     // 5. GET /files on nonexistent file returns 404
     const notFoundRes = await api("GET", `/workspaces/${ws.id}/files?path=nonexistent.txt`);
     assert.equal(notFoundRes.status, 404);
+  } finally {
+    await srv.close();
+  }
+});
+
+test("ide endpoints: PUT /files (atomic, 409, force, CRLF) và POST /files (create, 403)", async () => {
+  const { srv, api, ws } = await setup(async () => "ok");
+  try {
+    const wsDir = ws.path;
+    writeFileSync(join(wsDir, "hello.txt"), "hello world\n");
+    writeFileSync(join(wsDir, "win.txt"), "line1\r\nline2\r\n");
+
+    const readRes = await api("GET", `/workspaces/${ws.id}/files?path=hello.txt`);
+    assert.equal(readRes.status, 200);
+    const initialHash = readRes.json.sha256;
+
+    // 1. PUT /files saves successfully with matching expectedSha256
+    const putRes = await api("PUT", `/workspaces/${ws.id}/files`, {
+      path: "hello.txt",
+      content: "hello updated\n",
+      expectedSha256: initialHash,
+    });
+    assert.equal(putRes.status, 200);
+    assert.equal(putRes.json.path, "hello.txt");
+    assert.notEqual(putRes.json.sha256, initialHash);
+    assert.equal(readFileSync(join(wsDir, "hello.txt"), "utf-8"), "hello updated\n");
+
+    // 2. PUT /files returns 409 when expectedSha256 does not match disk
+    const conflictRes = await api("PUT", `/workspaces/${ws.id}/files`, {
+      path: "hello.txt",
+      content: "divergent edit\n",
+      expectedSha256: "stale-sha256-hash",
+    });
+    assert.equal(conflictRes.status, 409);
+    assert.equal(conflictRes.json.diskContent, "hello updated\n");
+    assert.ok(conflictRes.json.diskSha256);
+
+    // 3. PUT /files with force: true succeeds despite stale hash
+    const forceRes = await api("PUT", `/workspaces/${ws.id}/files`, {
+      path: "hello.txt",
+      content: "forced overwrite\n",
+      expectedSha256: "stale-sha256-hash",
+      force: true,
+    });
+    assert.equal(forceRes.status, 200);
+    assert.equal(readFileSync(join(wsDir, "hello.txt"), "utf-8"), "forced overwrite\n");
+
+    // 4. PUT /files preserves CRLF
+    const winRead = await api("GET", `/workspaces/${ws.id}/files?path=win.txt`);
+    const winPut = await api("PUT", `/workspaces/${ws.id}/files`, {
+      path: "win.txt",
+      content: "line1\nline2\nline3\n",
+      expectedSha256: winRead.json.sha256,
+    });
+    assert.equal(winPut.status, 200);
+    assert.equal(readFileSync(join(wsDir, "win.txt"), "utf-8"), "line1\r\nline2\r\nline3\r\n");
+
+    // 5. POST /files creates a new file and returns 201
+    const createRes = await api("POST", `/workspaces/${ws.id}/files`, {
+      path: "src/utils/calc.ts",
+      content: "export const add = (a: number, b: number) => a + b;",
+    });
+    assert.equal(createRes.status, 201);
+    assert.equal(createRes.json.path, "src/utils/calc.ts");
+    assert.equal(readFileSync(join(wsDir, "src", "utils", "calc.ts"), "utf-8"), "export const add = (a: number, b: number) => a + b;");
+
+    // 6. POST /files returns 409 if file already exists
+    const dupRes = await api("POST", `/workspaces/${ws.id}/files`, {
+      path: "src/utils/calc.ts",
+      content: "new",
+    });
+    assert.equal(dupRes.status, 409);
+
+    // 7. POST /files returns 403 on traversal or secret file
+    const travRes = await api("POST", `/workspaces/${ws.id}/files`, {
+      path: "../outside.txt",
+      content: "evil",
+    });
+    assert.equal(travRes.status, 403);
+
+    const secRes = await api("POST", `/workspaces/${ws.id}/files`, {
+      path: ".env",
+      content: "SECRET=1",
+    });
+    assert.equal(secRes.status, 403);
   } finally {
     await srv.close();
   }

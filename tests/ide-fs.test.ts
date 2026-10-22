@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { assertSafeWorkspacePath, listWorkspaceTree, readWorkspaceFile, HttpError } from "../src/ide-fs.ts";
+import { assertSafeWorkspacePath, listWorkspaceTree, readWorkspaceFile, saveWorkspaceFile, createWorkspaceFile, HttpError } from "../src/ide-fs.ts";
 
 function createTempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -163,6 +163,125 @@ test("readWorkspaceFile ném lỗi 413 khi kích thước file > 2MB", async () 
     await assert.rejects(async () => {
       await readWorkspaceFile(wsDir, "big.txt");
     }, (err: any) => err instanceof HttpError && err.status === 413);
+  } finally {
+    fs.rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test("saveWorkspaceFile ghi file atomic thành công và trả về sha256 mới", async () => {
+  const wsDir = createTempDir("ws-save-");
+  try {
+    const file = path.join(wsDir, "test.txt");
+    fs.writeFileSync(file, "hello initial\n", "utf-8");
+
+    const initial = await readWorkspaceFile(wsDir, "test.txt");
+    const res = await saveWorkspaceFile(wsDir, "test.txt", "hello updated\n", {
+      expectedSha256: initial.sha256,
+    });
+
+    assert.equal(res.path, "test.txt");
+    assert.notEqual(res.sha256, initial.sha256);
+    assert.equal(fs.readFileSync(file, "utf-8"), "hello updated\n");
+    // Ensure no leftover temp files
+    const allFiles = fs.readdirSync(wsDir);
+    assert.equal(allFiles.length, 1);
+    assert.equal(allFiles[0], "test.txt");
+  } finally {
+    fs.rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test("saveWorkspaceFile ném lỗi 409 Conflict khi expectedSha256 không khớp với đĩa", async () => {
+  const wsDir = createTempDir("ws-conflict-");
+  try {
+    const file = path.join(wsDir, "file.txt");
+    fs.writeFileSync(file, "content on disk", "utf-8");
+
+    await assert.rejects(async () => {
+      await saveWorkspaceFile(wsDir, "file.txt", "my new content", {
+        expectedSha256: "wrong-sha256-hash",
+      });
+    }, (err: any) => {
+      assert.ok(err instanceof HttpError);
+      assert.equal(err.status, 409);
+      assert.equal(err.extra?.diskContent, "content on disk");
+      assert.ok(err.extra?.diskSha256);
+      assert.ok(err.extra?.diskMtime);
+      return true;
+    });
+
+    // Content on disk remains untouched
+    assert.equal(fs.readFileSync(file, "utf-8"), "content on disk");
+  } finally {
+    fs.rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test("saveWorkspaceFile cho phép ghi đè khi có cờ force: true kể cả khi hash lệch", async () => {
+  const wsDir = createTempDir("ws-force-");
+  try {
+    const file = path.join(wsDir, "file.txt");
+    fs.writeFileSync(file, "content on disk", "utf-8");
+
+    const res = await saveWorkspaceFile(wsDir, "file.txt", "forced content", {
+      expectedSha256: "wrong-sha256-hash",
+      force: true,
+    });
+
+    assert.equal(fs.readFileSync(file, "utf-8"), "forced content");
+    assert.equal(res.path, "file.txt");
+  } finally {
+    fs.rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test("saveWorkspaceFile giữ nguyên định dạng xuống dòng CRLF (\\r\\n) của file gốc", async () => {
+  const wsDir = createTempDir("ws-crlf-");
+  try {
+    const file = path.join(wsDir, "windows.txt");
+    fs.writeFileSync(file, "line1\r\nline2\r\n", "utf-8");
+
+    const initial = await readWorkspaceFile(wsDir, "windows.txt");
+    // Client sends LF
+    await saveWorkspaceFile(wsDir, "windows.txt", "line1\nline2\nline3\n", {
+      expectedSha256: initial.sha256,
+    });
+
+    const savedBuffer = fs.readFileSync(file);
+    const savedText = savedBuffer.toString("utf-8");
+    assert.equal(savedText, "line1\r\nline2\r\nline3\r\n");
+    assert.ok(!savedText.includes("\r\r\n"));
+  } finally {
+    fs.rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test("createWorkspaceFile tạo file mới trong thư mục con tự động tạo parent folder", async () => {
+  const wsDir = createTempDir("ws-create-");
+  try {
+    const res = await createWorkspaceFile(wsDir, "src/components/Button.tsx", "export const Button = () => null;");
+    assert.equal(res.path, "src/components/Button.tsx");
+    assert.equal(fs.readFileSync(path.join(wsDir, "src/components/Button.tsx"), "utf-8"), "export const Button = () => null;");
+
+    // Thử tạo lại file đã tồn tại -> 409
+    await assert.rejects(async () => {
+      await createWorkspaceFile(wsDir, "src/components/Button.tsx", "new");
+    }, (err: any) => err instanceof HttpError && err.status === 409);
+  } finally {
+    fs.rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test("createWorkspaceFile ném lỗi 403 khi path traversal (../) hoặc file bí mật (.env)", async () => {
+  const wsDir = createTempDir("ws-create-sec-");
+  try {
+    await assert.rejects(async () => {
+      await createWorkspaceFile(wsDir, "../outside.txt", "evil");
+    }, (err: any) => err instanceof HttpError && err.status === 403);
+
+    await assert.rejects(async () => {
+      await createWorkspaceFile(wsDir, ".env", "EVIL=1");
+    }, (err: any) => err instanceof HttpError && err.status === 403);
   } finally {
     fs.rmSync(wsDir, { recursive: true, force: true });
   }

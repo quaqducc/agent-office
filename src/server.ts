@@ -15,7 +15,7 @@ import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
 import { browseDirectory, pickNativeFolder, type PickFolderResult } from "./fs-browse.ts";
 import { OFFICE_TEMPLATES } from "./offices.ts";
-import { listWorkspaceTree, readWorkspaceFile, HttpError as IdeFsError } from "./ide-fs.ts";
+import { listWorkspaceTree, readWorkspaceFile, saveWorkspaceFile, createWorkspaceFile, HttpError as IdeFsError } from "./ide-fs.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -312,6 +312,23 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         if (!subpath) throw new HttpError(400, "path query parameter is required");
         const fileRes = await readWorkspaceFile(ctx.ws.path, subpath);
         return json(200, fileRes);
+      }
+      if (m === "PUT" && parts[2] === "files") {
+        const b = await body(req);
+        if (typeof b.path !== "string" || !b.path) throw new HttpError(400, "path is required");
+        if (typeof b.content !== "string") throw new HttpError(400, "content must be a string");
+        const res = await saveWorkspaceFile(ctx.ws.path, b.path, b.content, {
+          expectedSha256: typeof b.expectedSha256 === "string" ? b.expectedSha256 : undefined,
+          force: Boolean(b.force),
+        });
+        return json(200, res);
+      }
+      if (m === "POST" && parts[2] === "files") {
+        const b = await body(req);
+        if (typeof b.path !== "string" || !b.path.trim()) throw new HttpError(400, "path is required");
+        const content = typeof b.content === "string" ? b.content : "";
+        const res = await createWorkspaceFile(ctx.ws.path, b.path.trim(), content);
+        return json(201, res);
       }
       if (m === "GET" && parts[2] === "queue") return json(200, store.getQueue(ctx.ws));
       if (m === "DELETE" && parts[2] === "queue" && parts[3]) {

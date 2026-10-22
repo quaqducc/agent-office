@@ -351,6 +351,8 @@ a per-role sandbox is the planned upgrade.
 | `DELETE /workspaces/:id/queue/:qid` | cancel a queued message (`{deleted: qid}`) |
 | `GET /workspaces/:id/tree?path=.&depth=1` | list workspace directory tree (filtering `.git`, `node_modules`, `.company`) |
 | `GET /workspaces/:id/files?path=...` | read workspace file (`{path, content, size, mtime, sha256, isBinary}`) capped at 2MB |
+| `PUT /workspaces/:id/files` `{path, content, expectedSha256?, force?}` | atomically save workspace file (returns `{path, sha256, mtime, size}`; 409 conflict if `expectedSha256` mismatches disk unless `force: true`; preserves CRLF/LF) |
+| `POST /workspaces/:id/files` `{path, content?}` | create a new file in workspace (creates parent dirs; 409 if exists; 403 on traversal or secret) |
 | `PUT /workspaces/:id/config` `{roles: string[], template?: string, rooms?: RoomDef[]}` | update workspace roles, template, and rooms (validates installed roles; rebuilds router context when idle) |
 | `POST /workspaces/:id/messages {text}` | message the Manager (starts run `{runId}` or queues `{queued: true, position, id}`) |
 | `GET /runs/:runId/events` · `POST /runs/:runId/stop` | full event log of a run / stop a run |
@@ -389,14 +391,16 @@ a per-role sandbox is the planned upgrade.
   Both "Luồng việc" (Flow) and "Nhật ký" (Log) tabs feature a synchronized question selector dropdown listing user questions sent in the workspace, newest first with truncated preview, timestamp, and status ("đang chạy", "xong", "dừng"):
   1. `extractQuestions({ runs, liveLog, activeRunId, cachedEvents })`: Extracts questions from run summaries and decomposes mid-run follow-ups (`user_message` within the same active run) into distinct items.
   2. `filterQuestionData({ questionId, questions, events, tasks })`: Partitions events and tasks by sequence boundaries between consecutive questions in the same run.
-- **Embedded IDE layout & read-only file viewer (`ui/js/ide/tree.js`, `ui/js/ide/viewer.js`, `ide-fs.ts`).**
+- **Embedded IDE layout, two-layer editor & file manager (`ui/js/ide/tree.js`, `ui/js/ide/viewer.js`, `ide-fs.ts`).**
   Transforms the interface into a 4-zone minimalist IDE layout:
   1. **Activity Bar** (left 48px): Shortcuts and toggles for Explorer (`Ctrl+B`), Bottom Panel (`Ctrl+J`), Chat Manager (`Ctrl+Alt+B`), Role Store, Settings, and Light/Dark Theme toggle.
-  2. **Sidebar Explorer** (`#sidebar-explorer`): Lazy-loaded directory tree with keyboard navigation (arrows, Enter), folder expand/collapse, and file inspection. Secrets (`.env`, `.ssh`, `.company`, key files) are flagged with lock badge `🔒` and blocked by path guard.
+  2. **Sidebar Explorer** (`#sidebar-explorer`): Lazy-loaded directory tree with keyboard navigation (arrows, Enter), folder expand/collapse, file inspection, and new file creation (`+` button). Secrets (`.env`, `.ssh`, `.company`, key files) are flagged with lock badge `🔒` and blocked by path guard.
   3. **Main Central Area** (`#main-editor-area`):
      - Pinned tab `🏢 Văn phòng 📌` displaying the pixel art office canvas and activity feed.
-     - Dynamic editor tabs for opened files, switchable with `Alt+O` and closable with `Ctrl+W`.
-     - Read-only code viewer with line numbers gutter, PrismJS syntax highlighting (automatically disabled for large files >500 lines or >200KB for maximum performance), and binary file warnings.
+     - Dynamic editor tabs for opened files with dirty indicator (`●`), switchable with `Alt+O` and closable with `Ctrl+W` (with unsaved changes confirmation dialog).
+     - Two-layer Editor: Transparent `<textarea>` layered directly over syntax-highlighted `<pre><code>` (PrismJS) with synchronized scroll and line numbers gutter. Captures IME composition events (`compositionstart`, `compositionend`) ensuring seamless Vietnamese typing (Telex/Unikey/VNI), native undo/redo, and 2-space Tab insertion. Automatically disables syntax highlighting for large files (>500 lines or >200KB) for 60fps performance.
+     - Concurrency & Atomic Saving: `Ctrl+S` saves files atomically via temporary file and rename, preserving original CRLF/LF line-endings. Detects 409 conflicts against disk hash with interactive resolution modal (view diff, reload from disk, force overwrite).
+     - Live SSE Detection: Detects AI `tool_call` (`write`/`edit`) events via SSE; automatically reloads clean tabs and raises warning banners on dirty tabs.
      - Bottom Panel (`#bottom-panel`) housing synchronized "Luồng việc" and "Nhật ký" with full question selector preservation.
   4. **Side Chat Manager** (`#side-chat`): Dedicated right panel for conversation with Manager, approval request alerts, and serialized non-overlapping message queue.
   3. Seamless inspection without switching to replay: Selecting past run questions fetches events on demand via `api.events(runId)` to render the sliced flow tree and event log, while Pixel Office and Chat remain completely live in `app.live` without triggering replay mode.

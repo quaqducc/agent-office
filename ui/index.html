@@ -75,7 +75,10 @@
     <aside class="sidebar-explorer" id="sidebar-explorer" aria-label="Cây thư mục Workspace">
       <div class="sidebar-header">
         <span class="sidebar-title" id="explorer-title">EXPLORER</span>
-        <button id="explorer-refresh" class="icon-btn small" type="button" title="Làm mới cây thư mục" aria-label="Làm mới"><i data-icon="refresh"></i></button>
+        <div class="sidebar-actions">
+          <button id="explorer-create-file" class="icon-btn small" type="button" title="Tạo tệp mới" aria-label="Tạo tệp mới"><i data-icon="plus"></i></button>
+          <button id="explorer-refresh" class="icon-btn small" type="button" title="Làm mới cây thư mục" aria-label="Làm mới"><i data-icon="refresh"></i></button>
+        </div>
       </div>
       <div class="explorer-tree" id="explorer-tree"></div>
     </aside>
@@ -179,6 +182,7 @@
   <dialog id="settings" class="ask sheet"></dialog>
   <dialog id="store" class="ask sheet wide"></dialog>
   <dialog id="office-dialog" class="ask sheet wide"></dialog>
+  <dialog id="conflict-dialog" class="ask sheet wide" aria-label="Xung đột tệp"></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script type="module" src="/ui/js/app.js"></script>

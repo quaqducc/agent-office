@@ -1,4 +1,4 @@
-// Read-only Code Viewer & Tab Manager
+// Embedded IDE Editor & Tab Manager (Phase 2: Two-layer Editor with IME support & Concurrency)
 import { api } from "../api.js";
 import Prism from "../../vendor/prism.js";
 
@@ -26,10 +26,12 @@ export function createEditorViewer({
   tabsContainer,
   officeViewEl,
   editorViewEl,
+  toast,
+  ask,
   onTabChange,
 }) {
   let currentWorkspaceId = null;
-  const openTabs = []; // { path, name, content, sha256, mtime, size, isBinary }
+  const openTabs = []; // { path, name, content, savedContent, sha256, mtime, size, isBinary, dirty, liveConflict, conflictDiskData }
   let activeTab = "office"; // "office" or file path
   let lastActiveFileTab = null;
 
@@ -65,8 +67,19 @@ export function createEditorViewer({
 
       const title = document.createElement("span");
       title.className = "tab-title";
-      title.textContent = tab.name;
       title.title = tab.path;
+
+      const titleText = document.createElement("span");
+      titleText.textContent = tab.name;
+      title.appendChild(titleText);
+
+      if (tab.dirty) {
+        const dot = document.createElement("span");
+        dot.className = "dirty-dot";
+        dot.title = "Chưa lưu";
+        title.appendChild(dot);
+      }
+
       title.addEventListener("click", () => selectTab(tab.path));
       tabEl.appendChild(title);
 
@@ -77,11 +90,30 @@ export function createEditorViewer({
       closeBtn.innerHTML = "×";
       closeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        closeTab(tab.path);
+        requestCloseTab(tab.path);
       });
       tabEl.appendChild(closeBtn);
 
       tabsContainer.appendChild(tabEl);
+    }
+  }
+
+  function updateTabUI(tab) {
+    const tabEl = tabsContainer.querySelector(`[data-path="${CSS.escape(tab.path)}"]`);
+    if (!tabEl) return;
+    const title = tabEl.querySelector(".tab-title");
+    if (!title) return;
+
+    let dot = title.querySelector(".dirty-dot");
+    if (tab.dirty) {
+      if (!dot) {
+        dot = document.createElement("span");
+        dot.className = "dirty-dot";
+        dot.title = "Chưa lưu";
+        title.appendChild(dot);
+      }
+    } else {
+      dot?.remove();
     }
   }
 
@@ -105,9 +137,26 @@ export function createEditorViewer({
 
     if (path !== "office") {
       const tab = openTabs.find((t) => t.path === path);
-      if (tab) renderFileContent(tab);
+      if (tab) renderEditor(tab);
     }
     onTabChange?.(activeTab);
+  }
+
+  async function requestCloseTab(path) {
+    const tab = openTabs.find((t) => t.path === path);
+    if (!tab) return;
+
+    if (tab.dirty && ask) {
+      const confirmed = await ask({
+        title: "Đóng tệp chưa lưu",
+        text: `Tệp "${tab.name}" có thay đổi chưa lưu. Bạn có chắc muốn đóng và huỷ bỏ thay đổi?`,
+        confirm: "Đóng và huỷ",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
+
+    closeTab(path);
   }
 
   function closeTab(path) {
@@ -129,7 +178,7 @@ export function createEditorViewer({
 
   function closeActiveTab() {
     if (activeTab !== "office") {
-      closeTab(activeTab);
+      requestCloseTab(activeTab);
     }
   }
 
@@ -162,10 +211,14 @@ export function createEditorViewer({
         path: filePath,
         name,
         content: fileData.content,
+        savedContent: fileData.content,
         sha256: fileData.sha256,
         mtime: fileData.mtime,
         size: fileData.size,
         isBinary: fileData.isBinary,
+        dirty: false,
+        liveConflict: false,
+        conflictDiskData: null,
       };
 
       openTabs.push(tab);
@@ -182,23 +235,164 @@ export function createEditorViewer({
     }
   }
 
-  function renderFileContent(tab) {
+  async function saveTab(tab, force = false) {
+    if (!currentWorkspaceId || !tab || tab.isBinary) return;
+
+    try {
+      const res = await api.saveFile(currentWorkspaceId, tab.path, tab.content, tab.sha256, force);
+      tab.savedContent = tab.content;
+      tab.sha256 = res.sha256;
+      tab.mtime = res.mtime;
+      tab.size = res.size;
+      tab.dirty = false;
+      tab.liveConflict = false;
+      tab.conflictDiskData = null;
+
+      updateTabUI(tab);
+      if (activeTab === tab.path) {
+        renderEditor(tab);
+      }
+      toast?.("Đã lưu tệp", "ok");
+    } catch (err) {
+      if (err.status === 409) {
+        showConflictModal(tab, err);
+      } else {
+        toast?.(err.message || "Lỗi lưu file", "bad");
+      }
+    }
+  }
+
+  function showConflictModal(tab, err) {
+    const dialog = document.getElementById("conflict-dialog");
+    if (!dialog) {
+      alert(`⚠️ Xung đột tệp: ${err.message}`);
+      return;
+    }
+
+    const diskContent = err.diskContent ?? tab.conflictDiskData?.content ?? "";
+    const diskSha256 = err.diskSha256 ?? tab.conflictDiskData?.sha256 ?? "";
+    const diskMtime = err.diskMtime ?? tab.conflictDiskData?.mtime ?? new Date().toISOString();
+
+    dialog.innerHTML = `
+      <form method="dialog" class="ask-form">
+        <h2>⚠️ Xung đột tệp khi lưu</h2>
+        <p class="ask-text">Tệp <b>${escapeHtml(tab.path)}</b> trên đĩa đã bị thay đổi bởi AI hoặc tiến trình khác kể từ lần nạp cuối.</p>
+        
+        <div class="diff-viewer" id="diff-box">
+          <div class="diff-pane">
+            <div class="diff-pane-header">Nội dung của bạn (chưa lưu)</div>
+            <div class="diff-pane-content">${escapeHtml(tab.content)}</div>
+          </div>
+          <div class="diff-pane">
+            <div class="diff-pane-header">Nội dung trên đĩa (mới nhất)</div>
+            <div class="diff-pane-content">${escapeHtml(diskContent)}</div>
+          </div>
+        </div>
+
+        <div class="ask-buttons" style="justify-content: space-between; margin-top: 14px;">
+          <button type="button" class="btn" id="conflict-btn-cancel">Huỷ</button>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn" id="conflict-btn-reload">Nạp lại từ đĩa</button>
+            <button type="button" class="btn danger" id="conflict-btn-overwrite">Ghi đè bản này</button>
+          </div>
+        </div>
+      </form>
+    `;
+
+    dialog.querySelector("#conflict-btn-cancel")?.addEventListener("click", () => dialog.close());
+
+    dialog.querySelector("#conflict-btn-reload")?.addEventListener("click", () => {
+      tab.content = diskContent;
+      tab.savedContent = diskContent;
+      tab.sha256 = diskSha256;
+      tab.mtime = diskMtime;
+      tab.dirty = false;
+      tab.liveConflict = false;
+      tab.conflictDiskData = null;
+      dialog.close();
+      updateTabUI(tab);
+      if (activeTab === tab.path) renderEditor(tab);
+      toast?.("Đã nạp lại tệp từ đĩa", "ok");
+    });
+
+    dialog.querySelector("#conflict-btn-overwrite")?.addEventListener("click", async () => {
+      dialog.close();
+      await saveTab(tab, true);
+    });
+
+    dialog.showModal();
+  }
+
+  function renderEditor(tab) {
     editorViewEl.innerHTML = "";
 
+    // Header
     const header = document.createElement("div");
     header.className = "viewer-header";
     header.innerHTML = `
-      <div class="viewer-filepath">📄 <b>${escapeHtml(tab.path)}</b></div>
-      <div class="viewer-meta">${formatSize(tab.size)} · ${new Date(tab.mtime).toLocaleString("vi-VN")}</div>
+      <div class="viewer-filepath">
+        <span>📄 <b>${escapeHtml(tab.path)}</b></span>
+      </div>
+      <div class="viewer-header-actions">
+        ${tab.dirty ? `<button type="button" class="btn small primary viewer-header-btn" id="viewer-save-btn">Lưu (Ctrl+S)</button>` : ""}
+        <span class="viewer-meta">${formatSize(tab.size)} · ${new Date(tab.mtime).toLocaleString("vi-VN")}</span>
+      </div>
     `;
+    header.querySelector("#viewer-save-btn")?.addEventListener("click", () => saveTab(tab));
     editorViewEl.appendChild(header);
 
+    // Binary warning
     if (tab.isBinary) {
       const banner = document.createElement("div");
       banner.className = "viewer-banner warning";
-      banner.textContent = "File nhị phân (.png, .zip, .exe...). Không hỗ trợ xem văn bản.";
+      banner.textContent = "File nhị phân (.png, .zip, .exe...). Không hỗ trợ chỉnh sửa văn bản.";
       editorViewEl.appendChild(banner);
       return;
+    }
+
+    // Live conflict banner
+    if (tab.liveConflict) {
+      const banner = document.createElement("div");
+      banner.className = "viewer-banner conflict";
+      banner.innerHTML = `
+        <span>⚠️ Đội AI vừa chỉnh sửa tệp này trên đĩa. Bạn đang có thay đổi chưa lưu!</span>
+        <div class="viewer-banner-actions">
+          <button type="button" class="btn small" id="banner-btn-diff">Xem khác biệt</button>
+          <button type="button" class="btn small" id="banner-btn-reload">Nạp lại từ đĩa</button>
+          <button type="button" class="btn small primary" id="banner-btn-dismiss">Giữ bản của tôi</button>
+        </div>
+      `;
+      banner.querySelector("#banner-btn-diff")?.addEventListener("click", () => {
+        showConflictModal(tab, {
+          message: "Xung đột từ AI",
+          diskContent: tab.conflictDiskData?.content ?? "",
+          diskSha256: tab.conflictDiskData?.sha256 ?? "",
+          diskMtime: tab.conflictDiskData?.mtime ?? tab.mtime,
+        });
+      });
+      banner.querySelector("#banner-btn-reload")?.addEventListener("click", async () => {
+        try {
+          const fresh = await api.file(currentWorkspaceId, tab.path);
+          tab.content = fresh.content;
+          tab.savedContent = fresh.content;
+          tab.sha256 = fresh.sha256;
+          tab.mtime = fresh.mtime;
+          tab.size = fresh.size;
+          tab.dirty = false;
+          tab.liveConflict = false;
+          tab.conflictDiskData = null;
+          updateTabUI(tab);
+          renderEditor(tab);
+          toast?.("Đã nạp lại tệp mới nhất", "ok");
+        } catch (e) {
+          toast?.(e.message, "bad");
+        }
+      });
+      banner.querySelector("#banner-btn-dismiss")?.addEventListener("click", () => {
+        tab.liveConflict = false;
+        banner.remove();
+      });
+      editorViewEl.appendChild(banner);
     }
 
     const lines = tab.content.split("\n");
@@ -207,51 +401,143 @@ export function createEditorViewer({
     if (isLarge) {
       const banner = document.createElement("div");
       banner.className = "viewer-banner info";
-      banner.textContent = "Đã tắt tô màu cú pháp (file lớn >500 dòng hoặc >200KB) để bảo đảm hiệu năng.";
+      banner.textContent = "Đã tắt tô màu cú pháp (file lớn >500 dòng hoặc >200KB) để bảo đảm hiệu năng soạn thảo 60fps.";
       editorViewEl.appendChild(banner);
     }
 
-    const container = document.createElement("div");
-    container.className = "viewer-body";
+    // Body container: gutter + stage
+    const bodyContainer = document.createElement("div");
+    bodyContainer.className = "viewer-body";
 
     // Gutter for line numbers
     const gutter = document.createElement("div");
     gutter.className = "viewer-gutter";
     gutter.setAttribute("aria-hidden", "true");
-    const numLines = lines.length;
-    let gutterText = "";
-    for (let i = 1; i <= numLines; i++) {
-      gutterText += `${i}\n`;
-    }
-    gutter.textContent = gutterText;
-    container.appendChild(gutter);
 
-    // Code pre/code
+    function updateGutterText(count) {
+      let gutterText = "";
+      for (let i = 1; i <= count; i++) {
+        gutterText += `${i}\n`;
+      }
+      gutter.textContent = gutterText;
+    }
+    updateGutterText(lines.length);
+    bodyContainer.appendChild(gutter);
+
+    // Code container (holds pre and textarea)
+    const codeContainer = document.createElement("div");
+    codeContainer.className = `editor-code-container ${isLarge ? "large-file" : ""}`;
+
     const pre = document.createElement("pre");
-    pre.className = "viewer-pre";
+    pre.className = "editor-pre";
+    pre.setAttribute("aria-hidden", "true");
 
     const code = document.createElement("code");
     const ext = tab.name.split(".").pop()?.toLowerCase() || "";
     const lang = EXT_LANG_MAP[ext] || "text";
     code.className = `language-${lang}`;
-    code.textContent = tab.content;
+    code.textContent = tab.content.endsWith("\n") ? tab.content + " " : tab.content;
     pre.appendChild(code);
-    container.appendChild(pre);
+    codeContainer.appendChild(pre);
 
-    // Sync scroll between gutter and pre
-    pre.addEventListener("scroll", () => {
-      gutter.scrollTop = pre.scrollTop;
-    });
+    const textarea = document.createElement("textarea");
+    textarea.className = "editor-textarea";
+    textarea.spellcheck = false;
+    textarea.autocomplete = "off";
+    textarea.autocapitalize = "off";
+    textarea.value = tab.content;
+    textarea.setAttribute("aria-label", `Trình soạn thảo ${tab.name}`);
+    codeContainer.appendChild(textarea);
 
-    editorViewEl.appendChild(container);
+    bodyContainer.appendChild(codeContainer);
+    editorViewEl.appendChild(bodyContainer);
 
-    if (!isLarge && lang !== "text" && Prism.languages[lang]) {
+    // Highlight helper
+    function highlightCode() {
+      if (isLarge || lang === "text" || !Prism.languages[lang]) return;
       try {
+        code.textContent = textarea.value.endsWith("\n") ? textarea.value + " " : textarea.value;
         Prism.highlightElement(code);
       } catch (e) {
         console.warn("Prism highlight error:", e);
       }
     }
+
+    if (!isLarge) {
+      highlightCode();
+    }
+
+    // Synchronize scrolling
+    textarea.addEventListener("scroll", () => {
+      pre.scrollTop = textarea.scrollTop;
+      pre.scrollLeft = textarea.scrollLeft;
+      gutter.scrollTop = textarea.scrollTop;
+    });
+
+    // Vietnamese IME Composition Guard
+    let isComposing = false;
+    textarea.addEventListener("compositionstart", () => {
+      isComposing = true;
+    });
+    textarea.addEventListener("compositionend", () => {
+      isComposing = false;
+      highlightCode();
+    });
+
+    // Handle input & dirty detection
+    function handleInput() {
+      tab.content = textarea.value;
+      const numLines = tab.content.split("\n").length;
+      updateGutterText(numLines);
+
+      const nowDirty = tab.content !== tab.savedContent;
+      if (nowDirty !== tab.dirty) {
+        tab.dirty = nowDirty;
+        updateTabUI(tab);
+        let saveBtn = header.querySelector("#viewer-save-btn");
+        if (tab.dirty && !saveBtn) {
+          saveBtn = document.createElement("button");
+          saveBtn.type = "button";
+          saveBtn.className = "btn small primary viewer-header-btn";
+          saveBtn.id = "viewer-save-btn";
+          saveBtn.textContent = "Lưu (Ctrl+S)";
+          saveBtn.addEventListener("click", () => saveTab(tab));
+          header.querySelector(".viewer-header-actions")?.prepend(saveBtn);
+        } else if (!tab.dirty && saveBtn) {
+          saveBtn.remove();
+        }
+      }
+
+      if (!isLarge) {
+        if (!isComposing) {
+          highlightCode();
+        } else {
+          code.textContent = textarea.value.endsWith("\n") ? textarea.value + " " : textarea.value;
+        }
+      }
+    }
+
+    textarea.addEventListener("input", handleInput);
+
+    // Handle keys: Tab (2 spaces), Ctrl+S (save)
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const val = textarea.value;
+        textarea.value = val.substring(0, start) + "  " + val.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + 2;
+        handleInput();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        saveTab(tab);
+        return;
+      }
+    });
   }
 
   function formatSize(bytes) {
@@ -264,12 +550,63 @@ export function createEditorViewer({
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  async function handleExternalFileChange(changedRelPath) {
+    if (!changedRelPath || !currentWorkspaceId) return;
+    const normChanged = changedRelPath.replace(/^\.\//, "").replace(/\\/g, "/");
+
+    const tab = openTabs.find((t) => {
+      const normTab = t.path.replace(/^\.\//, "").replace(/\\/g, "/");
+      return normTab === normChanged || normTab.endsWith(normChanged) || normChanged.endsWith(normTab);
+    });
+
+    if (!tab) return;
+
+    if (!tab.dirty) {
+      try {
+        const fresh = await api.file(currentWorkspaceId, tab.path);
+        tab.content = fresh.content;
+        tab.savedContent = fresh.content;
+        tab.sha256 = fresh.sha256;
+        tab.mtime = fresh.mtime;
+        tab.size = fresh.size;
+        tab.dirty = false;
+        tab.liveConflict = false;
+        tab.conflictDiskData = null;
+
+        if (activeTab === tab.path) {
+          renderEditor(tab);
+          toast?.(`Tệp ${tab.name} đã được cập nhật từ đội AI`, "ok");
+        }
+      } catch (e) {
+        console.warn("Lỗi tự động nạp lại file:", e);
+      }
+    } else {
+      // Tab is dirty: live conflict!
+      tab.liveConflict = true;
+      try {
+        const fresh = await api.file(currentWorkspaceId, tab.path);
+        tab.conflictDiskData = fresh;
+      } catch {}
+
+      if (activeTab === tab.path) {
+        renderEditor(tab);
+      }
+    }
+  }
+
   return {
     init,
     openFile,
     selectTab,
     closeActiveTab,
     toggleOfficeFile,
+    saveCurrentTab: () => {
+      const tab = openTabs.find((t) => t.path === activeTab);
+      if (tab) saveTab(tab);
+    },
+    hasDirtyTabs: () => openTabs.some((t) => t.dirty),
+    getDirtyTabs: () => openTabs.filter((t) => t.dirty),
+    handleExternalFileChange,
     getActiveTab: () => activeTab,
   };
 }

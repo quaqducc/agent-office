@@ -29,7 +29,7 @@ const el = {
   actExplorer: $("#act-explorer"), actPanel: $("#act-panel"), actChat: $("#act-chat"),
   actStore: $("#act-store"), actSettings: $("#act-settings"), actTheme: $("#act-theme"),
   sidebarExplorer: $("#sidebar-explorer"), explorerTree: $("#explorer-tree"), explorerRefresh: $("#explorer-refresh"),
-  explorerTitle: $("#explorer-title"),
+  explorerTitle: $("#explorer-title"), explorerCreateFile: $("#explorer-create-file"),
   editorTabs: $("#editor-tabs"), viewOffice: $("#view-office"), viewEditor: $("#view-editor"),
   bottomPanel: $("#bottom-panel"), bottomTabFlow: $("#bottom-tab-flow"), bottomTabLog: $("#bottom-tab-log"),
   panelFlow: $("#panel-flow"), panelLog: $("#panel-log"), bottomPanelClose: $("#bottom-panel-close"),
@@ -72,6 +72,8 @@ const editorViewer = createEditorViewer({
   tabsContainer: el.editorTabs,
   officeViewEl: el.viewOffice,
   editorViewEl: el.viewEditor,
+  toast,
+  ask,
 });
 
 const explorerTree = createExplorerTree({
@@ -360,6 +362,16 @@ function localStorageGet(k) { try { return localStorage.getItem(`agent-office:${
 function localStorageSet(k, v) { try { localStorage.setItem(`agent-office:${k}`, v); } catch { /* storage unavailable */ } }
 
 async function openWorkspace(id) {
+  if (editorViewer.hasDirtyTabs()) {
+    const dirtyNames = editorViewer.getDirtyTabs().map(t => `"${t.name}"`).join(", ");
+    const ok = await ask({
+      title: "Chuyển workspace",
+      text: `Bạn có các tệp chưa lưu (${dirtyNames}). Bạn có chắc muốn đổi workspace và huỷ bỏ thay đổi?`,
+      confirm: "Đổi workspace",
+      danger: true,
+    });
+    if (!ok) return;
+  }
   const gen = ++app.gen;
   app.unsubscribe?.();
   app.unsubscribe = null;
@@ -466,6 +478,15 @@ async function refreshQueue() {
 function onLiveEvent(e) {
   if (!app.liveReady) { app.buffer.push(e); return; }
   app.live = reduce(app.live, e);
+  if (e.type === "tool_call") {
+    const tool = e.data?.tool;
+    if (tool === "write" || tool === "edit") {
+      const targetPath = e.data?.args?.path || e.data?.args?.file;
+      if (targetPath) {
+        editorViewer.handleExternalFileChange(targetPath);
+      }
+    }
+  }
   if (e.type === "run_started" || e.type === "run_finished") {
     refreshRuns().catch(() => {});
     refreshQueue().catch(() => {});
@@ -796,6 +817,28 @@ el.bottomPanelClose?.addEventListener("click", toggleBottomPanel);
 el.actChat?.addEventListener("click", toggleSideChat);
 el.sideChatClose?.addEventListener("click", toggleSideChat);
 el.explorerRefresh?.addEventListener("click", () => explorerTree.refresh());
+el.explorerCreateFile?.addEventListener("click", async () => {
+  if (!app.wsId) {
+    toast("Vui lòng chọn hoặc tạo workspace trước", "bad");
+    return;
+  }
+  const res = await ask({
+    title: "Tạo tệp mới",
+    fields: [
+      { name: "path", label: "Đường dẫn tệp trong workspace", placeholder: "src/utils.ts", required: true },
+    ],
+    confirm: "Tạo tệp",
+  });
+  if (!res || !res.path) return;
+  try {
+    const created = await api.createFile(app.wsId, res.path.trim());
+    toast(`Đã tạo ${created.path}`, "ok");
+    await explorerTree.refresh();
+    await editorViewer.openFile(created.path);
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+});
 
 function updateThemeUI(theme) {
   if (el.actTheme) {
@@ -839,6 +882,13 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     editorViewer.toggleOfficeFile();
     return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+    if (editorViewer.getActiveTab() !== "office") {
+      e.preventDefault();
+      editorViewer.saveCurrentTab();
+      return;
+    }
   }
   if ((e.ctrlKey || e.metaKey) && (e.key === "w" || e.key === "W")) {
     const tag = document.activeElement?.tagName?.toLowerCase();
