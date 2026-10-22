@@ -24,22 +24,62 @@ const DESK = `<svg class="desk-art" viewBox="0 0 132 64" shape-rendering="crispE
   <rect x="110" y="26" width="6" height="5" class="d-mon"/><rect x="104" y="30" width="18" height="3" class="d-mon"/>
 </svg>`;
 
+const escRole = (r) => (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(r) : String(r).replace(/"/g, '\\"'));
+
 const BADGE = {
   working: '<span class="dots"><i></i><i></i><i></i></span>',
   waiting: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h6M3 10.5h6M3.5 1.5c0 3 5 3 5 4.5s-5 1.5-5 4.5M8.5 1.5c0 3-5 3-5 4.5s5 1.5 5 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
   approval: "<b>!</b>",
 };
 
+const WALK_SPEED = 200; // px/sec
+
+function clamp(min, val, max) {
+  return Math.min(max, Math.max(min, val));
+}
+
+export function pathDistance(points) {
+  if (!points || points.length < 2) return 0;
+  let dist = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    dist += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  return dist;
+}
+
 /** Calculate replay walk duration and accessibility options. */
-export function walkDuration(speed = 1, prefersReducedMotion = false) {
+export function walkDuration(distance = 240, textLength = 0, speed = 1, prefersReducedMotion = false) {
+  // Support legacy signature (speed, prefersReducedMotion)
+  if (typeof textLength === "boolean") {
+    prefersReducedMotion = textLength;
+    speed = distance;
+    distance = 240;
+    textLength = 0;
+  }
+  if (arguments.length === 1 && (distance === 0 || distance === Infinity)) {
+    speed = distance;
+    distance = 240;
+    textLength = 0;
+  }
+
   if (prefersReducedMotion || speed === 0 || speed === Infinity) {
     return { isInstant: true, legDuration: 0, talkDuration: 0 };
   }
+
   const s = Math.max(0.1, Number(speed) || 1);
+  const d = Math.max(0, Number(distance) || 0);
+  const len = Math.max(0, Number(textLength) || 0);
+
+  const legBase = Math.max(600, Math.round((d / WALK_SPEED) * 1000));
+  const legDuration = Math.round(legBase / s);
+
+  const talkBase = clamp(1800, 1200 + len * 32, 3800);
+  const talkDuration = Math.round(talkBase / s);
+
   return {
     isInstant: false,
-    legDuration: Math.round(1200 / s),
-    talkDuration: Math.round(1000 / s),
+    legDuration,
+    talkDuration,
   };
 }
 
@@ -86,9 +126,298 @@ export class RoleWalkQueue {
   }
 }
 
-export const globalWalkQueue = new RoleWalkQueue({ maxConcurrent: 3, maxPerRoleQueue: 1 });
-const activeAnimControllers = new Set();
-const roleTokens = new Map();
+/** Causality sequencing and dependency management for character interactions. */
+export class CausalityDirector extends RoleWalkQueue {
+  constructor({ maxConcurrent = 3, maxPerRoleQueue = 1 } = {}) {
+    super({ maxConcurrent, maxPerRoleQueue });
+    this.queue = [];
+    this.roleStates = new Map(); // role -> "IDLE" | "WALKING_TO" | "CONVERSING" | "WALKING_BACK"
+    this.lockedRoles = new Set(); // roles locked at desk (waiting for incoming visitor)
+    this.activeWalkers = new Set();
+    this.activeControllers = new Set();
+    this.roleTokens = new Map();
+    this.activeItemTargets = new Map();
+    this.isDraining = false;
+  }
+
+  resolveActors(fx) {
+    let walker = fx?.from;
+    let target = fx?.to;
+    if (fx?.kind === "reply") {
+      walker = "manager";
+      target = "user";
+    } else if (fx?.kind === "approval") {
+      walker = fx?.from;
+      target = "user";
+    } else if (fx?.kind === "checkpoint") {
+      walker = fx?.from;
+      target = "manager";
+    }
+    return { walker, target };
+  }
+
+  isRoleBusy(role) {
+    const s = this.roleStates.get(role) || "IDLE";
+    return s !== "IDLE";
+  }
+
+  canStart(walker, target) {
+    if (this.lockedRoles.has(walker)) return false;
+    if (this.isRoleBusy(walker)) return false;
+    if (this.activeWalkers.size >= this.maxConcurrent) return false;
+    return true;
+  }
+
+  enqueue(fx, speed = 1, el = null) {
+    const { walker, target } = this.resolveActors(fx);
+    if (!walker || !target) return "dropped";
+
+    // Call RoleWalkQueue.prototype.enqueue for compatibility with test mocks & presence limits
+    const task = { walker, target, fx, speed, el };
+    const wqStatus = RoleWalkQueue.prototype.enqueue.call(this, walker, task);
+    if (wqStatus === "dropped" || wqStatus === "overflow" || wqStatus === "queued") {
+      return wqStatus;
+    }
+
+    const queuedForWalker = this.queue.filter(q => q.walker === walker).length;
+    if (queuedForWalker >= this.maxPerRoleQueue) {
+      return "dropped";
+    }
+
+    const item = { fx, walker, target, speed, el };
+
+    if (!this.canStart(walker, target)) {
+      this.active.delete(walker);
+      this.queue.push(item);
+      return "queued";
+    }
+
+    this.startItem(item);
+    return "running";
+  }
+
+  startItem(item) {
+    const { walker, target, el } = item;
+    this.active.add(walker);
+    this.activeWalkers.add(walker);
+    this.roleStates.set(walker, "WALKING_TO");
+    if (target && target !== "user") {
+      this.lockedRoles.add(target);
+    }
+    this.activeItemTargets.set(walker, target);
+    if (el) {
+      this.runDOMWalk(el, item);
+    }
+  }
+
+  arriveAtTarget(walker) {
+    if (this.roleStates.get(walker) === "WALKING_TO") {
+      this.roleStates.set(walker, "CONVERSING");
+    }
+  }
+
+  finishDialogue(walker) {
+    if (this.roleStates.get(walker) === "CONVERSING") {
+      this.roleStates.set(walker, "WALKING_BACK");
+    }
+    const target = this.activeItemTargets.get(walker);
+    if (target && target !== "user") {
+      this.lockedRoles.delete(target);
+    }
+    this.activeItemTargets.delete(walker);
+    this.drain();
+  }
+
+  returnToDesk(walker) {
+    this.roleStates.set(walker, "IDLE");
+    this.activeWalkers.delete(walker);
+    RoleWalkQueue.prototype.finish.call(this, walker);
+    this.drain();
+  }
+
+  drain() {
+    if (this.isDraining) return;
+    this.isDraining = true;
+    try {
+      let progressed = true;
+      while (progressed) {
+        progressed = false;
+        const index = this.queue.findIndex(item => this.canStart(item.walker, item.target));
+        if (index !== -1) {
+          const [item] = this.queue.splice(index, 1);
+          progressed = true;
+          this.startItem(item);
+        }
+      }
+    } finally {
+      this.isDraining = false;
+    }
+  }
+
+  clear() {
+    this.queue = [];
+    this.roleStates.clear();
+    this.lockedRoles.clear();
+    this.activeWalkers.clear();
+    this.activeItemTargets.clear();
+    RoleWalkQueue.prototype.clear.call(this);
+  }
+
+  cancelAll(el) {
+    this.roleTokens.clear();
+    for (const ctrl of this.activeControllers) {
+      try { ctrl.abort(); } catch (_) {}
+    }
+    this.activeControllers.clear();
+    this.clear();
+    if (el) {
+      el.querySelectorAll(".actor").forEach(a => a.remove());
+      el.querySelectorAll(".desk.away").forEach(d => d.classList.remove("away"));
+    }
+  }
+
+  pauseAll() {
+    for (const ctrl of this.activeControllers) {
+      try { ctrl.pause?.(); } catch (_) {}
+    }
+  }
+
+  resumeAll() {
+    for (const ctrl of this.activeControllers) {
+      try { ctrl.resume?.(); } catch (_) {}
+    }
+  }
+
+  async runDOMWalk(el, item) {
+    const { fx, walker, target, speed } = item;
+    const fxLayer = el.querySelector(".fx-layer") || el;
+    const rooms = el._rooms;
+    const desks = el._desks || deskLayout((el.dataset.roles ? el.dataset.roles.split(":")[0].split(",") : []).filter(Boolean), rooms);
+
+    const forwardPath = findWalkPath(walker, target, desks, rooms);
+    if (forwardPath.length < 2) {
+      this.finishDialogue(walker);
+      this.returnToDesk(walker);
+      return;
+    }
+
+    const dist = pathDistance(forwardPath);
+    const textLen = (fx?.label || "").length;
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timing = walkDuration(dist, textLen, speed, reduced);
+
+    const walkerDesk = walker === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${escRole(walker)}"]`);
+    walkerDesk?.classList.add("away");
+
+    const actor = document.createElement("div");
+    actor.className = "actor";
+    actor.dataset.role = walker;
+    actor.style.left = `${forwardPath[0].x}px`;
+    actor.style.top = `${forwardPath[0].y}px`;
+    actor.innerHTML = `<div class="char">${sprite(walker)}</div>`;
+    fxLayer.append(actor);
+
+    const token = Symbol(walker);
+    this.roleTokens.set(walker, token);
+
+    const ctrl = {
+      aborted: false,
+      anim: null,
+      timer: null,
+      timerRes: null,
+      timerRemaining: 0,
+      timerStartedAt: 0,
+      abort() {
+        this.aborted = true;
+        if (this.anim) try { this.anim.cancel(); } catch (_) {}
+        if (this.timer) {
+          clearTimeout(this.timer);
+          this.timer = null;
+        }
+        if (this.timerRes) {
+          const r = this.timerRes;
+          this.timerRes = null;
+          r();
+        }
+      },
+      pause() {
+        if (this.anim) {
+          try { this.anim.pause(); } catch (_) {}
+        }
+        if (this.timer) {
+          clearTimeout(this.timer);
+          this.timer = null;
+          this.timerRemaining = Math.max(0, this.timerRemaining - (Date.now() - this.timerStartedAt));
+        }
+      },
+      resume() {
+        if (this.anim) {
+          try { this.anim.play(); } catch (_) {}
+        }
+        if (this.timerRes && this.timerRemaining > 0) {
+          this.timerStartedAt = Date.now();
+          this.timer = setTimeout(() => {
+            this.timer = null;
+            const r = this.timerRes;
+            this.timerRes = null;
+            if (r) r();
+          }, this.timerRemaining);
+        }
+      }
+    };
+    this.activeControllers.add(ctrl);
+
+    try {
+      // 1. Walk forward to target
+      await animatePath(actor, forwardPath, timing.legDuration, ctrl);
+      if (ctrl.aborted) return;
+
+      // 2. Arrive at target and begin conversation
+      this.arriveAtTarget(walker);
+      const { text, cls } = getBubbleContent(fx);
+      const bubble = document.createElement("div");
+      bubble.className = "actor-bubble" + (cls ? ` ${cls}` : "");
+      bubble.textContent = text;
+      actor.append(bubble);
+
+      // Pulse target desk (active listening confirmation)
+      const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${escRole(target)}"]`);
+      targetDesk?.classList.add("ping");
+      setTimeout(() => targetDesk?.classList.remove("ping"), 600);
+
+      await new Promise(res => {
+        ctrl.timerRes = res;
+        ctrl.timerRemaining = timing.talkDuration;
+        ctrl.timerStartedAt = Date.now();
+        ctrl.timer = setTimeout(() => {
+          ctrl.timer = null;
+          ctrl.timerRes = null;
+          res();
+        }, timing.talkDuration);
+      });
+      bubble.remove();
+      if (ctrl.aborted) return;
+
+      // 3. Dialogue finished -> causality transfer point: unlock recipient!
+      this.finishDialogue(walker);
+
+      // 4. Walk back to own desk
+      const returnPath = forwardPath.slice().reverse();
+      await animatePath(actor, returnPath, timing.legDuration, ctrl);
+    } finally {
+      this.activeControllers.delete(ctrl);
+      actor.remove();
+      if (this.roleTokens.get(walker) === token) {
+        this.roleTokens.delete(walker);
+        walkerDesk?.classList.remove("away");
+        this.returnToDesk(walker);
+      }
+    }
+  }
+}
+
+export const globalCausalityDirector = new CausalityDirector({ maxConcurrent: 3, maxPerRoleQueue: 1 });
+export const globalWalkQueue = globalCausalityDirector;
 
 /** Format speech bubble text and styling from interaction effect. */
 export function getBubbleContent(fx) {
@@ -115,29 +444,15 @@ export function getBubbleContent(fx) {
 
 /** Cancel all walking animations and return everyone to their desk immediately. */
 export function cancelAllWalks(el) {
-  roleTokens.clear();
-  for (const ctrl of activeAnimControllers) {
-    try { ctrl.abort(); } catch (_) {}
-  }
-  activeAnimControllers.clear();
-  globalWalkQueue.clear();
-
-  if (el) {
-    el.querySelectorAll(".actor").forEach(a => a.remove());
-    el.querySelectorAll(".desk.away").forEach(d => d.classList.remove("away"));
-  }
+  globalCausalityDirector.cancelAll(el);
 }
 
 export function pauseAllWalks() {
-  for (const ctrl of activeAnimControllers) {
-    try { ctrl.pause?.(); } catch (_) {}
-  }
+  globalCausalityDirector.pauseAll();
 }
 
 export function resumeAllWalks() {
-  for (const ctrl of activeAnimControllers) {
-    try { ctrl.resume?.(); } catch (_) {}
-  }
+  globalCausalityDirector.resumeAll();
 }
 
 /**
@@ -269,135 +584,8 @@ async function animatePath(actor, points, totalLegDuration, signal) {
   actor.classList.remove("walking");
 }
 
-/** Execute a full walk: leave desk, walk to target, speak bubble, walk back. */
-async function runWalk(el, walker, target, fx, speed) {
-  const fxLayer = el.querySelector(".fx-layer") || el;
-  const rooms = el._rooms;
-  const desks = el._desks || deskLayout((el.dataset.roles ? el.dataset.roles.split(":")[0].split(",") : []).filter(Boolean), rooms);
-
-  const forwardPath = findWalkPath(walker, target, desks, rooms);
-  if (forwardPath.length < 2) {
-    finishWalk(el, walker);
-    return;
-  }
-
-  const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const timing = walkDuration(speed, reduced);
-
-  const walkerDesk = walker === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(walker)}"]`);
-  walkerDesk?.classList.add("away");
-
-  const actor = document.createElement("div");
-  actor.className = "actor";
-  actor.dataset.role = walker;
-  actor.style.left = `${forwardPath[0].x}px`;
-  actor.style.top = `${forwardPath[0].y}px`;
-  actor.innerHTML = `<div class="char">${sprite(walker)}</div>`;
-  fxLayer.append(actor);
-
-  const token = Symbol(walker);
-  roleTokens.set(walker, token);
-
-  const ctrl = {
-    aborted: false,
-    anim: null,
-    timer: null,
-    timerRes: null,
-    timerRemaining: 0,
-    timerStartedAt: 0,
-    abort() {
-      this.aborted = true;
-      if (this.anim) try { this.anim.cancel(); } catch (_) {}
-      if (this.timer) {
-        clearTimeout(this.timer);
-        this.timer = null;
-      }
-      if (this.timerRes) {
-        const r = this.timerRes;
-        this.timerRes = null;
-        r();
-      }
-    },
-    pause() {
-      if (this.anim) {
-        try { this.anim.pause(); } catch (_) {}
-      }
-      if (this.timer) {
-        clearTimeout(this.timer);
-        this.timer = null;
-        this.timerRemaining = Math.max(0, this.timerRemaining - (Date.now() - this.timerStartedAt));
-      }
-    },
-    resume() {
-      if (this.anim) {
-        try { this.anim.play(); } catch (_) {}
-      }
-      if (this.timerRes && this.timerRemaining > 0) {
-        this.timerStartedAt = Date.now();
-        this.timer = setTimeout(() => {
-          this.timer = null;
-          const r = this.timerRes;
-          this.timerRes = null;
-          if (r) r();
-        }, this.timerRemaining);
-      }
-    }
-  };
-  activeAnimControllers.add(ctrl);
-
-  try {
-    // 1. Walk forward to target
-    await animatePath(actor, forwardPath, timing.legDuration, ctrl);
-    if (ctrl.aborted) return;
-
-    // 2. Arrive and display speech bubble
-    const { text, cls } = getBubbleContent(fx);
-    const bubble = document.createElement("div");
-    bubble.className = "actor-bubble" + (cls ? ` ${cls}` : "");
-    bubble.textContent = text;
-    actor.append(bubble);
-
-    // Also pulse target desk
-    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
-    targetDesk?.classList.add("ping");
-    setTimeout(() => targetDesk?.classList.remove("ping"), 600);
-
-    await new Promise(res => {
-      ctrl.timerRes = res;
-      ctrl.timerRemaining = timing.talkDuration;
-      ctrl.timerStartedAt = Date.now();
-      ctrl.timer = setTimeout(() => {
-        ctrl.timer = null;
-        ctrl.timerRes = null;
-        res();
-      }, timing.talkDuration);
-    });
-    bubble.remove();
-    if (ctrl.aborted) return;
-
-    // 3. Walk back to own desk
-    const returnPath = forwardPath.slice().reverse();
-    await animatePath(actor, returnPath, timing.legDuration, ctrl);
-  } finally {
-    activeAnimControllers.delete(ctrl);
-    actor.remove();
-    if (roleTokens.get(walker) === token) {
-      roleTokens.delete(walker);
-      walkerDesk?.classList.remove("away");
-      finishWalk(el, walker);
-    }
-  }
-}
-
-function finishWalk(el, walker) {
-  const next = globalWalkQueue.finish(walker);
-  if (next) {
-    runWalk(el, next.walker, next.target, next.fx, next.speed);
-  }
-}
-
 /**
- * Handle interaction effect by walking characters and speech bubbles instead of flying envelopes.
+ * Handle interaction effect by walking characters and speech bubbles with natural pacing and causality sequencing.
  * @param {HTMLElement} el office element
  * @param {{kind:string, from:string, to:string, label:string}} fx
  * @param {number} speed playback speed multiplier (live = 1)
@@ -405,26 +593,10 @@ function finishWalk(el, walker) {
 export function playEffect(el, fx, speed = 1) {
   if (!el || !fx) return;
 
-  // Determine walker and target according to interaction rules:
-  // - reply: manager goes to user at ENTRANCE
-  // - approval / checkpoint: role goes to manager
-  // - handoff / done / failed: sender goes to recipient
-  let walker = fx.from;
-  let target = fx.to;
-
-  if (fx.kind === "reply") {
-    walker = "manager";
-    target = "user";
-  } else if (fx.kind === "approval") {
-    walker = fx.from;
-    target = "user";
-  } else if (fx.kind === "checkpoint") {
-    walker = fx.from;
-    target = "manager";
-  }
+  const { walker, target } = globalCausalityDirector.resolveActors(fx);
 
   if (!walker || !target || walker === target) {
-    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
+    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${escRole(target)}"]`);
     if (targetDesk) {
       targetDesk.classList.add("ping");
       setTimeout(() => targetDesk.classList.remove("ping"), 300);
@@ -433,11 +605,11 @@ export function playEffect(el, fx, speed = 1) {
   }
 
   const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const timing = walkDuration(speed, reduced);
+  const timing = walkDuration(240, (fx.label || "").length, speed, reduced);
 
   // Instant or reduced motion mode: flash bubble at target desk without walking
   if (timing.isInstant) {
-    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(target)}"]`);
+    const targetDesk = target === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${escRole(target)}"]`);
     if (targetDesk) {
       targetDesk.classList.add("ping");
       const { text, cls } = getBubbleContent(fx);
@@ -459,11 +631,11 @@ export function playEffect(el, fx, speed = 1) {
     return;
   }
 
-  // Queue walk with Single Presence protection
-  const status = globalWalkQueue.enqueue(walker, { walker, target, fx, speed });
+  // Enqueue via CausalityDirector with causality locking and single presence
+  const status = globalCausalityDirector.enqueue(fx, speed, el);
   if (status === "overflow" || status === "dropped") {
     // Congested or role already has a waiting walk: flash bubble / ping at walker desk immediately
-    const walkerDesk = walker === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${CSS.escape(walker)}"]`);
+    const walkerDesk = walker === "user" ? el.querySelector(".user-spot") : el.querySelector(`.desk[data-role="${escRole(walker)}"]`);
     if (walkerDesk) {
       walkerDesk.classList.add("ping");
       const { text, cls } = getBubbleContent(fx);
@@ -484,12 +656,6 @@ export function playEffect(el, fx, speed = 1) {
         setTimeout(() => walkerDesk.classList.remove("ping"), 300);
       }
     }
-    return;
   }
-  if (status === "queued") {
-    return;
-  }
-
-  runWalk(el, walker, target, fx, speed);
 }
 

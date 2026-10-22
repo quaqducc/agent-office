@@ -7,7 +7,7 @@ import { deskLayout, findWalkPath, getRoomDeskSlots, getRoomBoxes, getRoomDoors,
 // @ts-ignore
 import { sceneSvg } from "../ui/js/scene.js";
 // @ts-ignore
-import { RoleWalkQueue, walkDuration, getBubbleContent, renderOffice, playEffect, cancelAllWalks, pauseAllWalks, resumeAllWalks } from "../ui/js/office.js";
+import { RoleWalkQueue, CausalityDirector, walkDuration, getBubbleContent, renderOffice, playEffect, cancelAllWalks, pauseAllWalks, resumeAllWalks } from "../ui/js/office.js";
 
 test("sprite template is a 16x16 grid", () => {
   assert.equal(SPRITE_ROWS.length, 16);
@@ -186,34 +186,104 @@ test("RoleWalkQueue ensures single presence per role and enforces concurrency li
   assert.equal(q.active.has("developer"), false);
 });
 
-test("walkDuration scales accurately with replay speed and respects accessibility", () => {
-  // Speed x1: 1.2s leg, 1.0s talk
-  const x1 = walkDuration(1, false);
-  assert.equal(x1.isInstant, false);
-  assert.equal(x1.legDuration, 1200);
-  assert.equal(x1.talkDuration, 1000);
+test("walkDuration natural pacing scales with distance, text length, replay speed and accessibility", () => {
+  // Base natural pacing at 1x speed: WALK_SPEED = 200 px/sec
+  // Short distance (100px): (100 / 200) * 1000 = 500ms, clamped to minimum 600ms
+  const shortWalk = walkDuration(100, 0, 1, false);
+  assert.equal(shortWalk.isInstant, false);
+  assert.equal(shortWalk.legDuration, 600);
+  assert.equal(shortWalk.talkDuration, 1800);
 
-  // Speed x4: 300ms leg, 250ms talk
-  const x4 = walkDuration(4, false);
-  assert.equal(x4.isInstant, false);
-  assert.equal(x4.legDuration, 300);
-  assert.equal(x4.talkDuration, 250);
+  // Moderate distance (400px), short text (20 chars): 2000ms leg, 1840ms talk
+  const modWalk = walkDuration(400, 20, 1, false);
+  assert.equal(modWalk.isInstant, false);
+  assert.equal(modWalk.legDuration, 2000);
+  assert.equal(modWalk.talkDuration, 1840);
 
-  // Speed x16: 75ms leg, ~63ms talk
-  const x16 = walkDuration(16, false);
-  assert.equal(x16.isInstant, false);
-  assert.equal(x16.legDuration, 75);
-  assert.equal(x16.talkDuration, 63);
+  // Long distance (600px), long text (100 chars): 3000ms leg, clamped to 3800ms talk
+  const longWalk = walkDuration(600, 100, 1, false);
+  assert.equal(longWalk.isInstant, false);
+  assert.equal(longWalk.legDuration, 3000);
+  assert.equal(longWalk.talkDuration, 3800);
+
+  // Replay speed x2: durations scale down proportionally
+  const speed2 = walkDuration(400, 20, 2, false);
+  assert.equal(speed2.isInstant, false);
+  assert.equal(speed2.legDuration, 1000);
+  assert.equal(speed2.talkDuration, 920);
+
+  // Replay speed x4:
+  const speed4 = walkDuration(400, 20, 4, false);
+  assert.equal(speed4.isInstant, false);
+  assert.equal(speed4.legDuration, 500);
+  assert.equal(speed4.talkDuration, 460);
 
   // Speed Infinity / 0: instant, zero walk
-  assert.equal(walkDuration(Infinity).isInstant, true);
-  assert.equal(walkDuration(0).isInstant, true);
+  assert.equal(walkDuration(400, 20, Infinity).isInstant, true);
+  assert.equal(walkDuration(400, 20, 0).isInstant, true);
 
   // prefers-reduced-motion: always instant
-  const reduced = walkDuration(1, true);
+  const reduced = walkDuration(400, 20, 1, true);
   assert.equal(reduced.isInstant, true);
   assert.equal(reduced.legDuration, 0);
   assert.equal(reduced.talkDuration, 0);
+});
+
+test("CausalityDirector locks recipient at desk and sequences actions so manager cannot leave until incoming report finishes", () => {
+  const director = new CausalityDirector();
+
+  // 1. Role A (developer) finishes task and reports to manager
+  const fxDone = { kind: "done", from: "developer", to: "manager", label: "Hoàn thành CSS layout" };
+  const res1 = director.enqueue(fxDone);
+  assert.equal(res1, "running");
+
+  // Developer is walking to manager; manager MUST be locked at desk!
+  assert.equal(director.roleStates.get("developer"), "WALKING_TO");
+  assert.equal(director.lockedRoles.has("manager"), true);
+  assert.equal(director.activeWalkers.has("developer"), true);
+
+  // 2. Server emits manager reply to user while developer is still on the way
+  const fxReply = { kind: "reply", from: "manager", to: "user", label: "Dạ đã xong việc" };
+  const res2 = director.enqueue(fxReply);
+  assert.equal(res2, "queued");
+
+  // Manager CANNOT leave desk because manager is locked waiting for incoming report!
+  assert.equal(director.activeWalkers.has("manager"), false);
+  assert.equal(director.roleStates.get("manager") || "IDLE", "IDLE");
+  assert.equal(director.queue.length, 1);
+
+  // 3. Developer arrives at manager desk and begins conversation
+  director.arriveAtTarget("developer");
+  assert.equal(director.roleStates.get("developer"), "CONVERSING");
+  // Manager is still locked during active dialogue
+  assert.equal(director.lockedRoles.has("manager"), true);
+  assert.equal(director.activeWalkers.has("manager"), false);
+
+  // 4. Developer finishes dialogue (causality transfer point)
+  director.finishDialogue("developer");
+
+  // Manager is now UNLOCKED and begins next journey to report to user!
+  assert.equal(director.lockedRoles.has("manager"), false);
+  assert.equal(director.activeWalkers.has("manager"), true);
+  assert.equal(director.roleStates.get("manager"), "WALKING_TO");
+  assert.equal(director.queue.length, 0);
+
+  // Developer is walking back to their own desk
+  assert.equal(director.roleStates.get("developer"), "WALKING_BACK");
+
+  // Developer arrives back at desk
+  director.returnToDesk("developer");
+  assert.equal(director.roleStates.get("developer"), "IDLE");
+  assert.equal(director.activeWalkers.has("developer"), false);
+
+  // Manager arrives at user, converses, and returns
+  director.arriveAtTarget("manager");
+  assert.equal(director.roleStates.get("manager"), "CONVERSING");
+  director.finishDialogue("manager");
+  assert.equal(director.roleStates.get("manager"), "WALKING_BACK");
+  director.returnToDesk("manager");
+  assert.equal(director.roleStates.get("manager"), "IDLE");
+  assert.equal(director.activeWalkers.has("manager"), false);
 });
 
 test("getBubbleContent formats text <= 60 chars and assigns warning/wait classes", () => {
