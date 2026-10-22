@@ -15,7 +15,11 @@ import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
 import { browseDirectory, pickNativeFolder, type PickFolderResult } from "./fs-browse.ts";
 import { OFFICE_TEMPLATES } from "./offices.ts";
-import { listWorkspaceTree, readWorkspaceFile, saveWorkspaceFile, createWorkspaceFile, HttpError as IdeFsError } from "./ide-fs.ts";
+import { listWorkspaceTree, readWorkspaceFile, saveWorkspaceFile, createWorkspaceFile, assertSafeWorkspacePath, HttpError as IdeFsError } from "./ide-fs.ts";
+import { getRunChanges, getShadowFileContent } from "./shadow.ts";
+import { myersDiff } from "./diff.ts";
+import { promises as fsPromises } from "node:fs";
+import { resolve as pathResolve } from "node:path";
 
 export interface ServerOptions {
   port?: number;
@@ -329,6 +333,45 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         const content = typeof b.content === "string" ? b.content : "";
         const res = await createWorkspaceFile(ctx.ws.path, b.path.trim(), content);
         return json(201, res);
+      }
+      if (m === "GET" && parts[2] === "changes") {
+        const runId = url.searchParams.get("runId");
+        if (!runId || !runId.trim()) throw new HttpError(400, "runId query parameter is required");
+        if (runId.includes("..") || runId.includes("/") || runId.includes("\\")) {
+          throw new HttpError(400, "invalid runId");
+        }
+        const changes = await getRunChanges(ctx.ws.path, runId);
+        return json(200, changes);
+      }
+      if (m === "GET" && parts[2] === "diff") {
+        const runId = url.searchParams.get("runId");
+        const subpath = url.searchParams.get("path");
+        if (!runId || !runId.trim()) throw new HttpError(400, "runId query parameter is required");
+        if (runId.includes("..") || runId.includes("/") || runId.includes("\\")) {
+          throw new HttpError(400, "invalid runId");
+        }
+        if (!subpath || !subpath.trim()) throw new HttpError(400, "path query parameter is required");
+
+        // Jail check: blocks path traversal, symlink out of bounds, and secrets
+        assertSafeWorkspacePath(ctx.ws.path, subpath);
+
+        // Read shadow text
+        const shadowRaw = await getShadowFileContent(ctx.ws.path, runId, subpath);
+        const oldText = shadowRaw ?? "";
+
+        // Read current disk text
+        const fullDiskPath = pathResolve(ctx.ws.path, subpath);
+        let newText = "";
+        if (existsSync(fullDiskPath)) {
+          try {
+            newText = await fsPromises.readFile(fullDiskPath, "utf-8");
+          } catch {
+            newText = "";
+          }
+        }
+
+        const diffResult = myersDiff(subpath, oldText, newText);
+        return json(200, diffResult);
       }
       if (m === "GET" && parts[2] === "queue") return json(200, store.getQueue(ctx.ws));
       if (m === "DELETE" && parts[2] === "queue" && parts[3]) {

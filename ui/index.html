@@ -60,6 +60,7 @@
     <nav class="activity-bar" id="activity-bar" aria-label="Thanh tác vụ">
       <div class="act-group top">
         <button id="act-explorer" class="act-btn on" type="button" title="Explorer (Ctrl+B)" aria-label="Explorer"><i data-icon="sidebar"></i></button>
+        <button id="act-changes" class="act-btn" type="button" title="Thay đổi theo lần chạy" aria-label="Thay đổi"><i data-icon="git"></i></button>
         <button id="act-panel" class="act-btn on" type="button" title="Bảng điều khiển (Ctrl+J)" aria-label="Bảng điều khiển"><i data-icon="panel"></i></button>
         <button id="act-chat" class="act-btn on" type="button" title="Trò chuyện Manager (Ctrl+Alt+B)" aria-label="Trò chuyện"><i data-icon="chat"></i></button>
       </div>
@@ -81,6 +82,22 @@
         </div>
       </div>
       <div class="explorer-tree" id="explorer-tree"></div>
+    </aside>
+
+    <!-- 2b. Sidebar Changes (240px, run-based diff) -->
+    <aside class="sidebar-explorer sidebar-changes" id="sidebar-changes" aria-label="Thay đổi theo lần chạy" hidden>
+      <div class="sidebar-header">
+        <span class="sidebar-title">THAY ĐỔI</span>
+        <div class="sidebar-actions">
+          <button id="changes-refresh" class="icon-btn small" type="button" title="Làm mới thay đổi" aria-label="Làm mới"><i data-icon="refresh"></i></button>
+        </div>
+      </div>
+      <div class="changes-controls">
+        <label class="changes-run-label" for="changes-run-select">Lần chạy:</label>
+        <select id="changes-run-select" class="changes-run-select"></select>
+        <div class="changes-notice">ℹ️ Chỉ theo dõi file đội sửa bằng công cụ write/edit</div>
+      </div>
+      <div class="changes-file-list" id="changes-file-list"></div>
     </aside>
 
     <!-- 3. Central Area (Editor tabs + Office / Code view + Bottom panel) -->

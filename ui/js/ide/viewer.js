@@ -1,6 +1,7 @@
 // Embedded IDE Editor & Tab Manager (Phase 2: Two-layer Editor with IME support & Concurrency)
 import { api } from "../api.js";
 import Prism from "../../vendor/prism.js";
+import { renderDiffView } from "./diff.js";
 
 const EXT_LANG_MAP = {
   js: "javascript",
@@ -57,17 +58,24 @@ export function createEditorViewer({
     officeTab.addEventListener("click", () => selectTab("office"));
     tabsContainer.appendChild(officeTab);
 
-    // File Tabs
+    // File & Diff Tabs
     for (const tab of openTabs) {
+      const tabId = tab.id || tab.path;
       const tabEl = document.createElement("div");
-      tabEl.className = `editor-tab ${activeTab === tab.path ? "active" : ""}`;
+      tabEl.className = `editor-tab ${activeTab === tabId ? "active" : ""}`;
       tabEl.setAttribute("role", "tab");
-      tabEl.setAttribute("aria-selected", String(activeTab === tab.path));
-      tabEl.setAttribute("data-path", tab.path);
+      tabEl.setAttribute("aria-selected", String(activeTab === tabId));
+      tabEl.setAttribute("data-path", tabId);
 
       const title = document.createElement("span");
       title.className = "tab-title";
       title.title = tab.path;
+
+      if (tab.type === "diff") {
+        const diffIco = document.createElement("span");
+        diffIco.textContent = "🔀 ";
+        title.appendChild(diffIco);
+      }
 
       const titleText = document.createElement("span");
       titleText.textContent = tab.name;
@@ -80,7 +88,7 @@ export function createEditorViewer({
         title.appendChild(dot);
       }
 
-      title.addEventListener("click", () => selectTab(tab.path));
+      title.addEventListener("click", () => selectTab(tabId));
       tabEl.appendChild(title);
 
       const closeBtn = document.createElement("button");
@@ -90,7 +98,7 @@ export function createEditorViewer({
       closeBtn.innerHTML = "×";
       closeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        requestCloseTab(tab.path);
+        requestCloseTab(tabId);
       });
       tabEl.appendChild(closeBtn);
 
@@ -136,14 +144,14 @@ export function createEditorViewer({
     showView(path);
 
     if (path !== "office") {
-      const tab = openTabs.find((t) => t.path === path);
+      const tab = openTabs.find((t) => (t.id || t.path) === path);
       if (tab) renderEditor(tab);
     }
     onTabChange?.(activeTab);
   }
 
   async function requestCloseTab(path) {
-    const tab = openTabs.find((t) => t.path === path);
+    const tab = openTabs.find((t) => (t.id || t.path) === path);
     if (!tab) return;
 
     if (tab.dirty && ask) {
@@ -160,14 +168,14 @@ export function createEditorViewer({
   }
 
   function closeTab(path) {
-    const index = openTabs.findIndex((t) => t.path === path);
+    const index = openTabs.findIndex((t) => (t.id || t.path) === path);
     if (index === -1) return;
 
     openTabs.splice(index, 1);
     if (activeTab === path) {
       if (openTabs.length > 0) {
         const nextIndex = Math.max(0, index - 1);
-        selectTab(openTabs[nextIndex].path);
+        selectTab(openTabs[nextIndex].id || openTabs[nextIndex].path);
       } else {
         selectTab("office");
       }
@@ -184,10 +192,10 @@ export function createEditorViewer({
 
   function toggleOfficeFile() {
     if (activeTab === "office") {
-      if (lastActiveFileTab && openTabs.some((t) => t.path === lastActiveFileTab)) {
+      if (lastActiveFileTab && openTabs.some((t) => (t.id || t.path) === lastActiveFileTab)) {
         selectTab(lastActiveFileTab);
       } else if (openTabs.length > 0) {
-        selectTab(openTabs[openTabs.length - 1].path);
+        selectTab(openTabs[openTabs.length - 1].id || openTabs[openTabs.length - 1].path);
       }
     } else {
       selectTab("office");
@@ -208,6 +216,8 @@ export function createEditorViewer({
       const fileData = await api.file(currentWorkspaceId, filePath);
       const name = filePath.split("/").pop() || filePath;
       const tab = {
+        type: "file",
+        id: filePath,
         path: filePath,
         name,
         content: fileData.content,
@@ -227,6 +237,44 @@ export function createEditorViewer({
       editorViewEl.innerHTML = `
         <div class="viewer-error">
           <h3>Không thể mở file</h3>
+          <p>${escapeHtml(err.message)}</p>
+          <button class="btn small" type="button" id="viewer-back-btn">Quay lại Văn phòng</button>
+        </div>
+      `;
+      editorViewEl.querySelector("#viewer-back-btn")?.addEventListener("click", () => selectTab("office"));
+    }
+  }
+
+  async function openDiff(filePath, runId) {
+    const tabId = `diff:${runId}:${filePath}`;
+    const existing = openTabs.find((t) => t.id === tabId);
+    if (existing) {
+      selectTab(tabId);
+      return;
+    }
+
+    try {
+      editorViewEl.innerHTML = `<div class="viewer-loading">Đang tải diff ${escapeHtml(filePath)}…</div>`;
+      showView(tabId);
+
+      const diffData = await api.diff(currentWorkspaceId, filePath, runId);
+      const name = `Diff: ${filePath.split("/").pop() || filePath}`;
+      const tab = {
+        type: "diff",
+        id: tabId,
+        path: filePath,
+        runId,
+        name,
+        diffData,
+        dirty: false,
+      };
+
+      openTabs.push(tab);
+      selectTab(tabId);
+    } catch (err) {
+      editorViewEl.innerHTML = `
+        <div class="viewer-error">
+          <h3>Không thể tải diff</h3>
           <p>${escapeHtml(err.message)}</p>
           <button class="btn small" type="button" id="viewer-back-btn">Quay lại Văn phòng</button>
         </div>
@@ -324,6 +372,11 @@ export function createEditorViewer({
   }
 
   function renderEditor(tab) {
+    if (tab.type === "diff") {
+      renderDiffView(editorViewEl, tab.diffData, (p) => openFile(p));
+      return;
+    }
+
     editorViewEl.innerHTML = "";
 
     // Header
@@ -597,11 +650,12 @@ export function createEditorViewer({
   return {
     init,
     openFile,
+    openDiff,
     selectTab,
     closeActiveTab,
     toggleOfficeFile,
     saveCurrentTab: () => {
-      const tab = openTabs.find((t) => t.path === activeTab);
+      const tab = openTabs.find((t) => (t.id || t.path) === activeTab && t.type !== "diff");
       if (tab) saveTab(tab);
     },
     hasDirtyTabs: () => openTabs.some((t) => t.dirty),

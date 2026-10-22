@@ -9,6 +9,7 @@ import { loadConfig, modelFor, piModelsJson, writePiModels } from "./settings.ts
 import { assemblePrompt, loadRole, skillDir } from "./library.ts";
 import { makeTools, type ResearchState } from "./tools.ts";
 import { checkToolCall } from "./guard.ts";
+import { captureShadow } from "./shadow.ts";
 import type { Router, RunnerFactory } from "./router.ts";
 import type { TeamEventType } from "./types.ts";
 
@@ -101,7 +102,15 @@ export async function buildRoleSession(o: {
     extensionFactories: [pi => {
       pi.on("tool_call", (e: any) => {
         const r = checkToolCall(e.toolName, e.input, cwd);
-        return r.block ? { block: true, reason: r.reason } : undefined;
+        if (r.block) return { block: true, reason: r.reason };
+        if (e.toolName === "write" || e.toolName === "edit") {
+          const runId = o.router().activeRunId();
+          const targetPath = e.input?.path;
+          if (runId && typeof targetPath === "string") {
+            void captureShadow(cwd, runId, targetPath).catch(() => {});
+          }
+        }
+        return undefined;
       });
     }],
     noPromptTemplates: true,

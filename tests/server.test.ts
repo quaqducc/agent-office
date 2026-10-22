@@ -769,3 +769,68 @@ test("ide endpoints: PUT /files (atomic, 409, force, CRLF) và POST /files (crea
     await srv.close();
   }
 });
+
+test("ide endpoints: GET /changes và GET /diff (shadow diff, jail, secret check)", async () => {
+  const { srv, api, ws } = await setup(async () => "ok");
+  const wsDir = ws.path;
+
+  try {
+    const runId = "test-run-diff-1";
+    const shadowDir = join(wsDir, ".company", "shadow", runId);
+    mkdirSync(shadowDir, { recursive: true });
+
+    // Original file before run
+    writeFileSync(join(wsDir, "app.ts"), "const a = 1;\nconst b = 2;\n", "utf-8");
+    // Shadow copy saved at original state
+    writeFileSync(join(shadowDir, "app.ts"), "const a = 1;\nconst b = 2;\n", "utf-8");
+    // New file created in run (status A)
+    writeFileSync(join(wsDir, "new.ts"), "export const x = 42;\n", "utf-8");
+
+    // Manifest
+    const manifest = {
+      runId,
+      files: {
+        "app.ts": { status: "M", capturedAt: new Date().toISOString() },
+        "new.ts": { status: "A", capturedAt: new Date().toISOString() },
+      },
+    };
+    writeFileSync(join(shadowDir, ".manifest.json"), JSON.stringify(manifest), "utf-8");
+
+    // Modify app.ts on disk during run
+    writeFileSync(join(wsDir, "app.ts"), "const a = 1;\nconst b = 99;\nconst c = 3;\n", "utf-8");
+
+    // 1. GET /changes returns A/M file list
+    const changesRes = await api("GET", `/workspaces/${ws.id}/changes?runId=${runId}`);
+    assert.equal(changesRes.status, 200);
+    assert.deepEqual(changesRes.json, [
+      { path: "app.ts", status: "M" },
+      { path: "new.ts", status: "A" },
+    ]);
+
+    // Missing runId returns 400
+    const noRunRes = await api("GET", `/workspaces/${ws.id}/changes`);
+    assert.equal(noRunRes.status, 400);
+
+    // 2. GET /diff compares shadow with current disk
+    const diffApp = await api("GET", `/workspaces/${ws.id}/diff?path=app.ts&runId=${runId}`);
+    assert.equal(diffApp.status, 200);
+    assert.equal(diffApp.json.path, "app.ts");
+    assert.equal(diffApp.json.additions, 2); // b = 99, c = 3
+    assert.equal(diffApp.json.deletions, 1); // b = 2
+
+    // 3. GET /diff for added file "new.ts" treats shadow as empty (all add)
+    const diffNew = await api("GET", `/workspaces/${ws.id}/diff?path=new.ts&runId=${runId}`);
+    assert.equal(diffNew.status, 200);
+    assert.equal(diffNew.json.additions, 2);
+    assert.equal(diffNew.json.deletions, 0);
+
+    // 4. GET /diff returns 403 on traversal or secret file
+    const travDiff = await api("GET", `/workspaces/${ws.id}/diff?path=../secret.txt&runId=${runId}`);
+    assert.equal(travDiff.status, 403);
+
+    const secDiff = await api("GET", `/workspaces/${ws.id}/diff?path=.env&runId=${runId}`);
+    assert.equal(secDiff.status, 403);
+  } finally {
+    await srv.close();
+  }
+});

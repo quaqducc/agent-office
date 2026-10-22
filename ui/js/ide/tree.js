@@ -6,6 +6,11 @@ export function createExplorerTree({ container, onFileSelect }) {
   let currentWorkspaceId = null;
   const folderCache = new Map(); // path -> TreeNode[]
   let focusedNodeEl = null;
+  const changedFilesMap = new Map(); // normalized relative path -> "A" | "M"
+
+  function norm(p) {
+    return String(p || "").replace(/\\/g, "/").replace(/^\.\//, "").trim();
+  }
 
   async function load(workspaceId) {
     currentWorkspaceId = workspaceId;
@@ -75,6 +80,35 @@ export function createExplorerTree({ container, onFileSelect }) {
     label.className = "tree-label";
     label.textContent = node.name;
     row.appendChild(label);
+
+    const normNodePath = norm(node.path);
+
+    if (node.type === "file") {
+      const changeStatus = changedFilesMap.get(normNodePath);
+      if (changeStatus) {
+        const badge = document.createElement("span");
+        badge.className = `badge-tag badge-${changeStatus.toLowerCase()}`;
+        badge.textContent = changeStatus;
+        badge.title = changeStatus === "A" ? "Tệp thêm mới" : "Tệp đã chỉnh sửa";
+        row.appendChild(badge);
+      }
+    } else if (node.type === "directory") {
+      // Check bubble-up: any changed file inside this directory
+      let hasChildChange = false;
+      const prefix = normNodePath ? normNodePath + "/" : "";
+      for (const p of changedFilesMap.keys()) {
+        if (p.startsWith(prefix)) {
+          hasChildChange = true;
+          break;
+        }
+      }
+      if (hasChildChange) {
+        const dot = document.createElement("span");
+        dot.className = "bubble-dot";
+        dot.title = "Có tệp thay đổi bên trong thư mục này";
+        row.appendChild(dot);
+      }
+    }
 
     if (node.isSecret) {
       const lockBadge = document.createElement("span");
@@ -201,8 +235,24 @@ export function createExplorerTree({ container, onFileSelect }) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  function setChangedFiles(changes) {
+    changedFilesMap.clear();
+    if (Array.isArray(changes)) {
+      for (const item of changes) {
+        if (item && item.path && item.status) {
+          changedFilesMap.set(norm(item.path), item.status);
+        }
+      }
+    }
+    // Re-render current tree
+    if (folderCache.has(".")) {
+      render();
+    }
+  }
+
   return {
     load,
     refresh: () => currentWorkspaceId && load(currentWorkspaceId),
+    setChangedFiles,
   };
 }

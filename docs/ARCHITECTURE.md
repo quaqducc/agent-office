@@ -402,7 +402,13 @@ a per-role sandbox is the planned upgrade.
      - Concurrency & Atomic Saving: `Ctrl+S` saves files atomically via temporary file and rename, preserving original CRLF/LF line-endings. Detects 409 conflicts against disk hash with interactive resolution modal (view diff, reload from disk, force overwrite).
      - Live SSE Detection: Detects AI `tool_call` (`write`/`edit`) events via SSE; automatically reloads clean tabs and raises warning banners on dirty tabs.
      - Bottom Panel (`#bottom-panel`) housing synchronized "Luồng việc" and "Nhật ký" with full question selector preservation.
-  4. **Side Chat Manager** (`#side-chat`): Dedicated right panel for conversation with Manager, approval request alerts, and serialized non-overlapping message queue.
+  4. **Run-based Diff Viewer & Shadow Backup (`src/diff.ts`, `src/shadow.ts`, `ui/js/ide/diff.js`):**
+     - **Non-blocking Shadow Snapshots**: Hooks into agent `write` and `edit` tool calls to capture the file's pre-modification state in `<workspace>/.company/shadow/<runId>/` along with a `.manifest.json` cataloging `A` (added) or `M` (modified) files. Constrained to 256KB per file and a 20MB FIFO storage quota that evicts oldest runs. All shadow capture executes in non-blocking asynchronous `try/catch` handlers, guaranteeing agent file operations are never delayed or failed by backup I/O errors.
+     - **Pure TypeScript Myers Diff**: Custom algorithm computing precise line additions, deletions, and line numbers (`oldLineNo`, `newLineNo`) capped at 10,000 lines (`truncated: true`) to preserve browser responsiveness.
+     - **Diff Endpoints & Jail Guards**: `GET /workspaces/:id/changes` and `GET /workspaces/:id/diff` safely serve file change manifests and computed diffs while strictly rejecting path traversal and forbidden secrets.
+     - **Changes Sidebar & Explorer Badges**: Activity Bar includes a dedicated Changes button (`#act-changes`) revealing `#sidebar-changes` with run dropdown selector, write/edit tracking note, and changed file list. Explorer tree dynamically shows `A`/`M` badges and bubbles orange indicator dots up to parent folders.
+     - **Diff Tabs in Editor**: Opening a changed file launches a `🔀 Diff: filename` tab with green/red row styling, line number gutters, summary statistics (`+x / -y`), and an instant "Mở file trong Editor" button.
+  5. **Side Chat Manager** (`#side-chat`): Dedicated right panel for conversation with Manager, approval request alerts, and serialized non-overlapping message queue.
   3. Seamless inspection without switching to replay: Selecting past run questions fetches events on demand via `api.events(runId)` to render the sliced flow tree and event log, while Pixel Office and Chat remain completely live in `app.live` without triggering replay mode.
 - **Rendering safety.** Model text is escaped (`util.esc`) or rendered with the safe Markdown
   wrapper: raw HTML shows as text, only http(s) links, no images.
@@ -424,6 +430,7 @@ a per-role sandbox is the planned upgrade.
 | `~/.agent-company/pi/` | generated `models.json`, pi `auth.json` (do not edit by hand) |
 | `<workspace>/.company/config.json` | optional `{roles: [...], limits: {...}}` for that workspace |
 | `<workspace>/.company/queue.json` | persistent FIFO message queue |
+| `<workspace>/.company/shadow/<runId>/` | pre-edit file snapshots and `.manifest.json` for run diffs (20MB FIFO quota) |
 | `<workspace>/.company/runs/` | `<runId>.jsonl` event logs + `index.json` run summaries |
 | `<workspace>/.company/sessions/<role>/` | pi conversation history per role |
 

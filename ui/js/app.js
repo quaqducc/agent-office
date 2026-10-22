@@ -26,10 +26,12 @@ const el = {
   logRole: $("#log-role"), logType: $("#log-type"), logCount: $("#log-count"), flowCount: $("#flow-count"),
   form: $("#chat-form"), input: $("#chat-input"), drawer: $("#drawer"), drawerBody: $("#drawer-body"), ask: $("#ask"), toast: $("#toast"),
   openOffice: $("#open-office"),
-  actExplorer: $("#act-explorer"), actPanel: $("#act-panel"), actChat: $("#act-chat"),
+  actExplorer: $("#act-explorer"), actChanges: $("#act-changes"), actPanel: $("#act-panel"), actChat: $("#act-chat"),
   actStore: $("#act-store"), actSettings: $("#act-settings"), actTheme: $("#act-theme"),
   sidebarExplorer: $("#sidebar-explorer"), explorerTree: $("#explorer-tree"), explorerRefresh: $("#explorer-refresh"),
   explorerTitle: $("#explorer-title"), explorerCreateFile: $("#explorer-create-file"),
+  sidebarChanges: $("#sidebar-changes"), changesRefresh: $("#changes-refresh"),
+  changesRunSelect: $("#changes-run-select"), changesFileList: $("#changes-file-list"),
   editorTabs: $("#editor-tabs"), viewOffice: $("#view-office"), viewEditor: $("#view-editor"),
   bottomPanel: $("#bottom-panel"), bottomTabFlow: $("#bottom-tab-flow"), bottomTabLog: $("#bottom-tab-log"),
   panelFlow: $("#panel-flow"), panelLog: $("#panel-log"), bottomPanelClose: $("#bottom-panel-close"),
@@ -460,6 +462,7 @@ async function refreshRuns() {
   if (!app.wsId) return [];
   app.runs = (await api.runs(app.wsId)).sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
   renderRunMenu();
+  renderChangesRunSelect();
   return app.runs;
 }
 
@@ -796,10 +799,106 @@ el.bottomTabLog?.addEventListener("click", () => {
   render();
 });
 
-function toggleExplorer() {
-  const isCollapsed = el.sidebarExplorer.classList.toggle("collapsed");
-  el.actExplorer?.classList.toggle("on", !isCollapsed);
+function showExplorerSidebar() {
+  if (el.sidebarExplorer.hidden) {
+    el.sidebarChanges.hidden = true;
+    el.sidebarExplorer.hidden = false;
+    el.sidebarExplorer.classList.remove("collapsed");
+    el.actExplorer?.classList.add("on");
+    el.actChanges?.classList.remove("on");
+  } else {
+    const isCollapsed = el.sidebarExplorer.classList.toggle("collapsed");
+    el.actExplorer?.classList.toggle("on", !isCollapsed);
+  }
 }
+
+function showChangesSidebar() {
+  if (el.sidebarChanges.hidden) {
+    el.sidebarExplorer.hidden = true;
+    el.sidebarExplorer.classList.remove("collapsed");
+    el.sidebarChanges.hidden = false;
+    el.actChanges?.classList.add("on");
+    el.actExplorer?.classList.remove("on");
+    if (el.changesRunSelect?.value) {
+      loadChanges(el.changesRunSelect.value);
+    }
+  } else {
+    el.sidebarChanges.hidden = true;
+    el.sidebarExplorer.classList.add("collapsed");
+    el.actChanges?.classList.remove("on");
+  }
+}
+
+async function loadChanges(runId) {
+  if (!app.wsId || !runId) {
+    if (el.changesFileList) el.changesFileList.innerHTML = `<div class="changes-empty">Không có lần chạy nào được chọn</div>`;
+    explorerTree.setChangedFiles([]);
+    return;
+  }
+
+  try {
+    const changes = await api.changes(app.wsId, runId);
+    explorerTree.setChangedFiles(changes);
+
+    if (!el.changesFileList) return;
+    el.changesFileList.innerHTML = "";
+
+    if (!changes || changes.length === 0) {
+      el.changesFileList.innerHTML = `<div class="changes-empty">Không có tệp nào thay đổi trong lần chạy này</div>`;
+      return;
+    }
+
+    for (const item of changes) {
+      const div = document.createElement("div");
+      div.className = "changes-item";
+      div.innerHTML = `
+        <span class="badge-tag badge-${item.status.toLowerCase()}">${item.status}</span>
+        <span class="changes-item-path" title="${esc(item.path)}">${esc(item.path)}</span>
+      `;
+      div.addEventListener("click", () => {
+        editorViewer.openDiff(item.path, runId);
+      });
+      el.changesFileList.appendChild(div);
+    }
+  } catch (err) {
+    if (el.changesFileList) el.changesFileList.innerHTML = `<div class="changes-empty">Lỗi: ${esc(err.message)}</div>`;
+  }
+}
+
+function renderChangesRunSelect() {
+  if (!el.changesRunSelect) return;
+  const currentVal = el.changesRunSelect.value;
+  el.changesRunSelect.innerHTML = "";
+
+  if (!app.runs || app.runs.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Chưa có lần chạy nào";
+    el.changesRunSelect.appendChild(opt);
+    loadChanges("");
+    return;
+  }
+
+  for (const r of app.runs) {
+    const opt = document.createElement("option");
+    opt.value = r.runId;
+    const timeStr = r.startedAt ? new Date(r.startedAt).toLocaleTimeString("vi-VN") : "";
+    const preview = r.firstMessage ? r.firstMessage.slice(0, 30) : r.runId;
+    opt.textContent = `${timeStr} · ${preview}`;
+    el.changesRunSelect.appendChild(opt);
+  }
+
+  if (currentVal && app.runs.some(r => r.runId === currentVal)) {
+    el.changesRunSelect.value = currentVal;
+  } else {
+    el.changesRunSelect.value = app.runs[0].runId;
+  }
+
+  loadChanges(el.changesRunSelect.value);
+}
+
+el.changesRunSelect?.addEventListener("change", (e) => loadChanges(e.target.value));
+el.changesRefresh?.addEventListener("click", () => loadChanges(el.changesRunSelect.value));
 
 function toggleBottomPanel() {
   const isCollapsed = el.bottomPanel.classList.toggle("collapsed");
@@ -811,7 +910,8 @@ function toggleSideChat() {
   el.actChat?.classList.toggle("on", !isCollapsed);
 }
 
-el.actExplorer?.addEventListener("click", toggleExplorer);
+el.actExplorer?.addEventListener("click", showExplorerSidebar);
+el.actChanges?.addEventListener("click", showChangesSidebar);
 el.actPanel?.addEventListener("click", toggleBottomPanel);
 el.bottomPanelClose?.addEventListener("click", toggleBottomPanel);
 el.actChat?.addEventListener("click", toggleSideChat);

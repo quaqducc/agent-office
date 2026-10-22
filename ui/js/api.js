@@ -41,6 +41,10 @@ export const api = {
     call("PUT", `/workspaces/${enc(workspaceId)}/files`, { path, content, expectedSha256, force }),
   createFile: (workspaceId, path, content = "") =>
     call("POST", `/workspaces/${enc(workspaceId)}/files`, { path, content }),
+  changes: (workspaceId, runId) =>
+    call("GET", `/workspaces/${enc(workspaceId)}/changes?runId=${enc(runId)}`),
+  diff: (workspaceId, path, runId) =>
+    call("GET", `/workspaces/${enc(workspaceId)}/diff?path=${enc(path)}&runId=${enc(runId)}`),
   health: () => call("GET", "/health"),
   settings: () => call("GET", "/settings"),
   saveSettings: c => call("PUT", "/settings", c),
