@@ -20,3 +20,6 @@ to Agent Company and only reference these personas and skills.
 
 Runtime dependencies (installed by npm, not vendored): `@earendil-works/pi-coding-agent` and its
 `@earendil-works/*` packages, `marked`, `typebox` — see their own licenses in `node_modules`.
+
+Vendored web client libraries:
+- `ui/vendor/prism.js` & `ui/vendor/prism.css`: PrismJS (v1.29.0) — MIT License, Copyright (c) 2012 Lea Verou and Prism contributors (https://prismjs.com/).

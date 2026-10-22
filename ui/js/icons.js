@@ -29,6 +29,12 @@ const P = {
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
   sparkle:"M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6",
   layout: "M3 3h18v18H3zM3 9h18M9 21V9",
+  file: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6",
+  lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
+  sidebar: "M3 3h18v18H3zM9 3v18",
+  panel: "M3 3h18v18H3zM3 15h18",
+  sun: "M12 3v1M12 20v1M3 12h1M20 12h1M5.6 5.6l.7.7M17.7 17.7l.7.7M5.6 18.4l.7-.7M17.7 6.3l.7-.7M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z",
+  moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
 };
 
 /** Inline SVG markup for a named icon. */

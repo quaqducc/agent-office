@@ -643,3 +643,44 @@ test("queue: reply checkpoint không bị xếp hàng", async () => {
     assert.deepEqual(order, ["first", "second"]);
   } finally { await srv.close(); }
 });
+
+test("ide endpoints: GET /tree và GET /files", async () => {
+  const { srv, api, ws } = await setup(async () => "ok");
+  try {
+    const wsDir = ws.path;
+    writeFileSync(join(wsDir, "README.md"), "# Hello IDE");
+    writeFileSync(join(wsDir, ".env"), "SECRET=true");
+    mkdirSync(join(wsDir, "src"), { recursive: true });
+    writeFileSync(join(wsDir, "src", "index.ts"), "export const x = 1;");
+
+    // 1. GET /tree returns 200 and lists nodes
+    const treeRes = await api("GET", `/workspaces/${ws.id}/tree?path=.&depth=1`);
+    assert.equal(treeRes.status, 200);
+    assert.ok(Array.isArray(treeRes.json));
+    const names = treeRes.json.map((n: any) => n.name);
+    assert.ok(names.includes("README.md"));
+    assert.ok(names.includes("src"));
+    assert.ok(names.includes(".env"));
+
+    // 2. GET /tree with path traversal returns 403
+    const travRes = await api("GET", `/workspaces/${ws.id}/tree?path=../`);
+    assert.equal(travRes.status, 403);
+
+    // 3. GET /files on valid file returns 200 and content
+    const fileRes = await api("GET", `/workspaces/${ws.id}/files?path=README.md`);
+    assert.equal(fileRes.status, 200);
+    assert.equal(fileRes.json.content, "# Hello IDE");
+    assert.equal(fileRes.json.path, "README.md");
+    assert.ok(fileRes.json.sha256);
+
+    // 4. GET /files on .env returns 403 Forbidden
+    const secretRes = await api("GET", `/workspaces/${ws.id}/files?path=.env`);
+    assert.equal(secretRes.status, 403);
+
+    // 5. GET /files on nonexistent file returns 404
+    const notFoundRes = await api("GET", `/workspaces/${ws.id}/files?path=nonexistent.txt`);
+    assert.equal(notFoundRes.status, 404);
+  } finally {
+    await srv.close();
+  }
+});

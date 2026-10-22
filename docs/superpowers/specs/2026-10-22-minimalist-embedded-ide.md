@@ -10,7 +10,7 @@ Bản đặc tả này định hình kiến trúc kỹ thuật để bổ sung m
 
 ### 5 Nguyên tắc Tối thượng:
 1. **Developer-First & Agent-Centric**: Lấy mã nguồn và hiệu quả cộng tác làm trung tâm, nhưng vẫn bảo tồn nét độc đáo của văn phòng pixel art.
-2. **Zero-Build & Ultra-Lightweight**: Không dùng bundler (Webpack, Vite), không framework nặng. 100% Vanilla HTML5, CSS3 hiện đại, ES Modules native. Thư viện siêu nhẹ (CodeJar + PrismJS) được vendor trực tiếp vào `ui/vendor/`.
+2. **Zero-Build & Ultra-Lightweight**: Không dùng bundler (Webpack, Vite), không framework nặng. 100% Vanilla HTML5, CSS3 hiện đại, ES Modules native. Thư viện siêu nhẹ PrismJS được vendor trực tiếp vào `ui/vendor/prism.js` (MIT License, khai báo tại `THIRD_PARTY_NOTICES.md`), không thêm bất kỳ npm dependencies nào.
 3. **Chuẩn hóa màn hình 1366 × 768px**: Thiết kế tối ưu cho laptop phổ thông, bố trí các panel linh hoạt, không bị vỡ hoặc ép chật giao diện.
 4. **Bảo mật tuyệt đối (Workspace Jail & Guard Integration)**: Kế thừa và tái sử dụng 100% quy tắc an ninh từ `src/guard.ts`. Ngăn chặn hoàn toàn path traversal, symlink escape, và rò rỉ secret credentials.
 5. **Tối giản có chủ đích (Intentional Minimalism)**: Kiên quyết loại bỏ terminal tương tác PTY, debugger, LSP và extension store để giữ app siêu nhẹ, ổn định và bảo mật.
@@ -50,8 +50,8 @@ Chuẩn màn hình laptop $1366 \times 768\text{px}$ có chiều cao hiển th�
 | **Activity Bar** | **48px** cố định | Không | Luôn hiển thị dọc mép trái |
 | **Sidebar (Explorer / Runs)** | **240px** | 180px – 360px | Phím tắt **`Ctrl+B`** hoặc click icon trên Activity Bar |
 | **Editor trung tâm** | **738px** *(khi mở hết)* | Co giãn theo viewport | Mở rộng lên **978px** khi đóng Explorer, và **1318px** khi đóng cả Chat |
-| **Chat Manager (Phải)** | **340px** | 300px – 420px | Nút thu gọn trên Topbar hoặc phím tắt `Ctrl+J` |
-| **Bottom Panel (Dưới)** | Chiều cao **180px** | 120px – 320px | Nút chevron góc panel hoặc kéo splitter xuống đáy |
+| **Chat Manager (Phải)** | **340px** | 300px – 420px | Nút thu gọn trên Topbar hoặc phím tắt **`Ctrl+Alt+B`** |
+| **Bottom Panel (Dưới)** | Chiều cao **180px** | 120px – 320px | Phím tắt **`Ctrl+J`** hoặc click icon trên Activity Bar |
 
 > **Khả năng hiển thị Code ở màn hình 1366px**:
 > Với chiều rộng 738px của Editor, font chữ monospace kích thước `13px` (khoảng `7.8px` mỗi ký tự), vùng hiển thị code đạt **khoảng 90 – 95 ký tự trên một dòng** trước khi cần soft-wrap. Đây là chuẩn mực tối ưu cho hầu hết ngôn ngữ lập trình phổ biến (PEP 8, ESLint 80-100 ký tự).
@@ -96,29 +96,17 @@ Nhằm tránh làm ô nhiễm cây thư mục và bảo vệ hiệu năng máy:
 
 ## 4. Công nghệ Code Editor & An toàn Lưu file (Ctrl+S)
 
-### 4.1 Đề xuất Công nghệ: CodeJar + PrismJS với IME Guard & Fallback
-So sánh với các giải pháp khác, CodeJar + PrismJS là lựa chọn hoàn hảo nhất cho ứng dụng web không có bước build (Zero-Build Vanilla ESM):
-- Dung lượng siêu nhẹ: CodeJar ($\sim 2.5\text{ KB}$) + PrismJS core & grammars ($\sim 20\text{ KB}$).
-- Hỗ trợ đầy đủ: Highlight cú pháp (JS, TS, HTML, CSS, JSON, MD, Python, Shell), thụt dòng Tab tự động, auto-close brackets, Undo/Redo.
-
-#### ⚠️ Cải tiến Trọng yếu từ Critic: IME Guard (`isComposing`)
-Khi người dùng gõ tiếng Việt bằng bộ gõ Unikey / Telex / VNI trên phần tử `contenteditable`, việc PrismJS re-highlight và can thiệp vào selection ở mỗi sự kiện `input` sẽ làm **gãy ký tự gõ dở, mất dấu hoặc sinh lỗi lặp từ** (ví dụ gõ "tiếng" biến thành "tieeesng").
-**Giải pháp kiến trúc bắt buộc**:
-```javascript
-let isComposing = false;
-editorElement.addEventListener("compositionstart", () => { isComposing = true; });
-editorElement.addEventListener("compositionend", () => {
-  isComposing = false;
-  jar.highlight(); // Chỉ highlight khi đã kết thúc gõ từ tiếng Việt
-});
-// Trong hàm input listener của CodeJar:
-if (!isComposing) {
-  highlight();
-}
-```
-
-#### Fallback Graceful Degradation (`<textarea>`)
-Nếu trình duyệt của người dùng gặp lỗi rendering `contenteditable` hoặc tắt script, hệ thống tự động fallback về thẻ `<textarea class="code-fallback">` chuẩn với font monospace và tab-indentation thủ công, đảm bảo không bao giờ làm gián đoạn việc xem và sửa code.
+### 4.1 Đề xuất Công nghệ: Textarea trong suốt phủ lên `<pre>` PrismJS
+Thay vì sử dụng thư viện bên ngoài như CodeJar, hệ thống sử dụng kỹ thuật kinh điển, ổn định và nhẹ nhất: **Textarea trong suốt phủ lên `<pre><code>` được tô màu cú pháp bởi PrismJS**:
+- **Nguyên lý hoạt động**:
+  - Lớp hiển thị bên dưới: Thẻ `<pre><code class="language-...">` chứa nội dung mã nguồn được PrismJS tô màu cú pháp và gutter đánh số dòng.
+  - Lớp soạn thảo bên trên: Thẻ `<textarea>` trong suốt (`color: transparent`, `caret-color: var(--ink)`), đồng bộ kích thước font, line-height, padding và vị trí cuộn `scroll` 1-1 với thẻ `<pre>`.
+  - Không gặp lỗi IME gõ tiếng Việt (Telex/Unikey) vì `<textarea>` là phần tử nhập liệu bản địa của trình duyệt, không bị gián đoạn hay gãy ký tự như `contenteditable`.
+- **Quy tắc Hiệu năng & Rào chắn File Lớn**:
+  - File có số dòng **> 500 dòng** hoặc dung lượng **> 200KB**: Hệ thống **tự động tắt syntax highlighting**, render mã nguồn dưới dạng plain text thuần túy trong `<pre><code>` để đảm bảo trình duyệt luôn mượt mà 60fps.
+  - File nhị phân (phát hiện byte null `0x00`) hoặc file vượt quá **2MB**: Server từ chối đọc với mã lỗi tương ứng (`403` hoặc `413`).
+- **Vendor Rule**:
+  - Cho phép vendor duy nhất 1 file tĩnh `ui/vendor/prism.js` (kèm stylesheet `ui/vendor/prism.css`) có giấy phép MIT License rõ ràng và được ghi nhận đầy đủ trong `THIRD_PARTY_NOTICES.md`. Tuyệt đối không cài thêm thư viện qua npm dependencies.
 
 ### 4.2 Lưu file (Ctrl+S) & Cơ chế Phát hiện Xung đột (409 Conflict)
 Khi cả người dùng và AI role đều có quyền sửa file trên đĩa:
@@ -143,7 +131,7 @@ Khi cả người dùng và AI role đều có quyền sửa file trên đĩa:
 
 ---
 
-## 5. Xem Thay đổi (Diff Viewer, Git & Shadow Backup)
+## 5. Xem Thay đổi (Diff Viewer & Shadow Backup)
 
 ### 5.1 Danh sách File thay đổi theo Câu hỏi / Lần chạy
 Tại thanh bên, ngoài tab Explorer, có tab **Lần chạy & Thay đổi**:
@@ -151,36 +139,15 @@ Tại thanh bên, ngoài tab Explorer, có tab **Lần chạy & Thay đổi**:
 - Bên dưới là danh sách các file đã được AI chỉnh sửa trong Run đó.
 - Nhấp vào file sẽ mở tab **Diff Viewer** tương ứng.
 
-### 5.2 Cơ chế Diff: Git Engine vs Non-Git Shadow Backup Engine
+### 5.2 Cơ chế Diff: Duy nhất 1 Cơ chế Shadow Backup theo Run
 
-```
-                             ┌──────────────────────────────┐
-                             │ File yêu cầu xem thay đổi    │
-                             └──────────────┬───────────────┘
-                                            │
-                     ┌──────────────────────┴──────────────────────┐
-                     ▼                                             ▼
-            [ Workspace có .git ]                        [ Workspace không có Git ]
-        Gọi `git diff` an toàn qua:               So sánh file hiện tại với snapshot:
-        `git diff --no-color -- <file>`           `.company/shadow/<runId>/<file>`
-                     │                            bằng Myers Diff thuần TypeScript.
-                     └──────────────────────┬──────────────────────┘
-                                            │
-                                            ▼
-                           Hiển thị giao diện Inline / Split Diff
-```
+Nhằm loại bỏ phụ thuộc vào môi trường Git của máy chủ/client, hệ thống sử dụng duy nhất một cơ chế: **Shadow Backup Engine theo từng Run**:
 
-#### A. Với Workspace có Git
-- Thực thi `git diff --no-color -- <path>` thông qua `node:child_process.execFile`.
-- Thiết lập giới hạn: timeout $5\text{s}$, maxBuffer $2\text{ MB}$.
-
-#### B. Với Workspace không có Git (Shadow Backup Engine) & Critic Guardrails
-Đối với các project chưa khởi tạo Git:
-- **Thời điểm tạo bản sao lưu**: Trước khi công cụ `write` hoặc `edit` của AI (hoặc `PUT` của User) ghi đè file, server sao chép nội dung gốc vào `<workspace>/.company/shadow/<runId>/<relativePath>`.
-- **Cải tiến & Rào chắn An toàn từ Critic (Critic Guardrails)**:
+- **Thời điểm tạo bản sao lưu**: Trước khi công cụ `write` hoặc `edit` của AI (hoặc `PUT` của User) ghi đè file, server tự động sao chép nội dung gốc vào `<workspace>/.company/shadow/<runId>/<relativePath>`.
+- **Cải tiến & Rào chắn An toàn (Guardrails)**:
   1. **Cap kích thước file shadow**: Chỉ tạo shadow backup cho file có kích thước $\le 256\text{ KB}$. Bỏ qua các file quá lớn để tránh nghẽn đĩa.
   2. **Giới hạn tổng dung lượng cache**: Thư mục `.company/shadow/` được giới hạn tối đa **$20\text{ MB}$**. Server tự động dọn dẹp các snapshot cũ nhất theo cơ chế LRU khi vượt quá ngưỡng.
-  3. **Myers Diff Guardrails**: Thuật toán Myers Diff thuần TS giới hạn so sánh tối đa **$10.000$ dòng code**. Nếu vượt quá, trả về thông báo tóm tắt để tránh làm treo CPU Node.js.
+  3. **Myers Diff Guardrails**: Thuật toán Myers Diff thuần TS so sánh bản sao shadow và file hiện tại trên đĩa, giới hạn so sánh tối đa **$10.000$ dòng code**. Nếu vượt quá, trả về thông báo tóm tắt để tránh làm treo CPU Node.js.
 
 ### 5.3 Giao diện Hiển thị Diff
 - Tích hợp trực tiếp dưới dạng Tab trong Editor: `[ 🔀 Diff: app.js × ]`.
@@ -266,28 +233,28 @@ Hệ thống được chia làm 4 giai đoạn độc lập, có thể nghiệm 
   4. File bí mật hiển thị biểu tượng ổ khóa và không thể mở.
 
 ### Giai đoạn 2: Sửa & Lưu File (Ctrl+S) + Phát hiện Xung đột + Guard
-- **Mục tiêu**: Chỉnh sửa trực tiếp file code với CodeJar + PrismJS, lưu đĩa an toàn, chống ghi đè khi AI đang làm việc.
+- **Mục tiêu**: Chỉnh sửa trực tiếp file code với Textarea trong suốt phủ `<pre>` PrismJS, lưu đĩa an toàn, chống ghi đè khi AI đang làm việc.
 - **File sửa / tạo mới**:
   - Backend: `src/ide-fs.ts` (thêm `writeWorkspaceFile`), `src/server.ts` (bổ sung route `PUT /files`).
-  - Frontend: `ui/vendor/codejar.js` (vendor), `ui/vendor/prism.js` (vendor), `ui/js/ide/editor.js` (mới), `ui/js/ide/conflict-dialog.js` (mới).
+  - Frontend: `ui/vendor/prism.js` (vendor), `ui/js/ide/editor.js` (mới), `ui/js/ide/conflict-dialog.js` (mới).
 - **Unit Tests (`node:test`)**:
   - `tests/ide-write.test.ts`: Test ghi file thành công, test `409 Conflict` khi `expectedSha256` không khớp, test chặn ghi vào file nhạy cảm.
 - **Tiêu chí Hoàn thành (DoD)**:
-  1. Gõ code mượt mà, hỗ trợ IME tiếng Việt không bị lỗi gãy chữ nhờ `isComposing`.
+  1. Gõ code mượt mà, hỗ trợ IME tiếng Việt không bị lỗi gãy chữ nhờ phần tử `<textarea>` bản địa.
   2. Bấm `Ctrl+S` lưu file vào đĩa an toàn (atomic write).
   3. Nếu AI role vừa chỉnh sửa file, việc lưu sẽ kích hoạt banner cảnh báo xung đột `409` để người dùng chủ động lựa chọn cách giải quyết.
 
-### Giai đoạn 3: Theo dõi Thay đổi (Diff Viewer Git / Shadow Backup)
-- **Mục tiêu**: Cung cấp giao diện trực quan so sánh những dòng code đã được AI thêm bớt theo từng lượt chạy.
+### Giai đoạn 3: Theo dõi Thay đổi (Diff Viewer Shadow Backup)
+- **Mục tiêu**: Cung cấp giao diện trực quan so sánh những dòng code đã được AI thêm bớt theo từng lượt chạy qua Shadow Backup.
 - **File sửa / tạo mới**:
   - Backend: `src/ide-diff.ts` (mới), `src/server.ts` (bổ sung route `GET /diff`).
   - Frontend: `ui/js/ide/diff-viewer.js` (mới), `ui/js/ide/runs-panel.js` (mới).
 - **Unit Tests (`node:test`)**:
-  - `tests/ide-diff.test.ts`: Test git diff trên repo git; test shadow backup và thuật toán Myers diff trên thư mục non-git; test giới hạn dung lượng 20MB và cap 256KB/file.
+  - `tests/ide-diff.test.ts`: Test shadow backup và thuật toán Myers diff; test giới hạn dung lượng 20MB và cap 256KB/file.
 - **Tiêu chí Hoàn thành (DoD)**:
   1. Tab "Lần chạy & Thay đổi" liệt kê đầy đủ danh sách file bị sửa kèm badge `+N / -M`.
   2. Bấm vào file mở ra giao diện Inline Diff xanh đỏ rõ ràng.
-  3. Hoạt động chính xác cho cả project có Git và project không có Git.
+  3. Hoạt động ổn định độc lập với môi trường Git.
 
 ### Giai đoạn 4: Bottom Panel (Nhật ký Lệnh & Kết quả Test)
 - **Mục tiêu**: Bảng điều khiển phía đáy hiển thị lệnh AI đang thực thi ngầm và tóm tắt kết quả kiểm thử.

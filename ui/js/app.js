@@ -12,6 +12,8 @@ import { esc } from "./util.js";
 import { openSettings, showSetup } from "./settings.js";
 import { openStore } from "./store.js";
 import { openOfficeDialog } from "./office-dialog.js";
+import { createExplorerTree } from "./ide/tree.js";
+import { createEditorViewer } from "./ide/viewer.js";
 
 const $ = sel => document.querySelector(sel);
 const el = {
@@ -24,6 +26,14 @@ const el = {
   logRole: $("#log-role"), logType: $("#log-type"), logCount: $("#log-count"), flowCount: $("#flow-count"),
   form: $("#chat-form"), input: $("#chat-input"), drawer: $("#drawer"), drawerBody: $("#drawer-body"), ask: $("#ask"), toast: $("#toast"),
   openOffice: $("#open-office"),
+  actExplorer: $("#act-explorer"), actPanel: $("#act-panel"), actChat: $("#act-chat"),
+  actStore: $("#act-store"), actSettings: $("#act-settings"), actTheme: $("#act-theme"),
+  sidebarExplorer: $("#sidebar-explorer"), explorerTree: $("#explorer-tree"), explorerRefresh: $("#explorer-refresh"),
+  explorerTitle: $("#explorer-title"),
+  editorTabs: $("#editor-tabs"), viewOffice: $("#view-office"), viewEditor: $("#view-editor"),
+  bottomPanel: $("#bottom-panel"), bottomTabFlow: $("#bottom-tab-flow"), bottomTabLog: $("#bottom-tab-log"),
+  panelFlow: $("#panel-flow"), panelLog: $("#panel-log"), bottomPanelClose: $("#bottom-panel-close"),
+  sideChat: $("#side-chat"), sideChatClose: $("#side-chat-close"),
 };
 
 const app = {
@@ -46,7 +56,7 @@ const app = {
   gen: 0,              // bumps on every workspace/replay switch; stale async results are dropped
   sseLost: false,
   selected: null,
-  tab: "chat",
+  tab: "flow",
   logType: "",
   version: "",
   queue: [],
@@ -57,6 +67,19 @@ const app = {
 
 const md = createMarkdown(Marked);
 for (const i of document.querySelectorAll("i[data-icon]")) i.outerHTML = icon(i.dataset.icon, i.className);
+
+const editorViewer = createEditorViewer({
+  tabsContainer: el.editorTabs,
+  officeViewEl: el.viewOffice,
+  editorViewEl: el.viewEditor,
+});
+
+const explorerTree = createExplorerTree({
+  container: el.explorerTree,
+  onFileSelect: filePath => {
+    editorViewer.openFile(filePath);
+  },
+});
 
 /** Panels cache their last render by a signature; clear it whenever the data source changes. */
 function resetPanels() {
@@ -327,6 +350,9 @@ function showOnboarding() {
     </ol>
     <button type="button" class="btn primary" data-act="add-ws">${icon("plus")}Thêm workspace</button>
   </div>`;
+  if (el.explorerTitle) el.explorerTitle.textContent = "EXPLORER";
+  if (el.explorerTree) el.explorerTree.innerHTML = "";
+  editorViewer.init(null);
   render();
 }
 
@@ -346,6 +372,13 @@ async function openWorkspace(id) {
   app.queue = [];
   localStorageSet("ws", id);
   renderWorkspaceMenu();
+  const curWs = app.workspaces.find(w => w.id === id);
+  if (el.explorerTitle && curWs) {
+    el.explorerTitle.textContent = curWs.name.toUpperCase();
+    el.explorerTitle.title = curWs.path;
+  }
+  explorerTree.load(id);
+  editorViewer.init(id);
   const cfg = await api.config(id);
   if (gen !== app.gen) return;
   app.rooms = cfg.rooms ?? null;
@@ -716,6 +749,107 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
   for (const k of ["flow", "log"]) $(`#${k}`).dataset.sig = "";
   render();
 }));
+
+// Bottom panel tabs
+el.bottomTabFlow?.addEventListener("click", () => {
+  app.tab = "flow";
+  el.bottomTabFlow.classList.add("on");
+  el.bottomTabFlow.setAttribute("aria-selected", "true");
+  el.bottomTabLog.classList.remove("on");
+  el.bottomTabLog.setAttribute("aria-selected", "false");
+  el.panelFlow.hidden = false;
+  el.panelLog.hidden = true;
+  el.flow.dataset.sig = "";
+  render();
+});
+
+el.bottomTabLog?.addEventListener("click", () => {
+  app.tab = "log";
+  el.bottomTabLog.classList.add("on");
+  el.bottomTabLog.setAttribute("aria-selected", "true");
+  el.bottomTabFlow.classList.remove("on");
+  el.bottomTabFlow.setAttribute("aria-selected", "false");
+  el.panelLog.hidden = false;
+  el.panelFlow.hidden = true;
+  el.log.dataset.sig = "";
+  render();
+});
+
+function toggleExplorer() {
+  const isCollapsed = el.sidebarExplorer.classList.toggle("collapsed");
+  el.actExplorer?.classList.toggle("on", !isCollapsed);
+}
+
+function toggleBottomPanel() {
+  const isCollapsed = el.bottomPanel.classList.toggle("collapsed");
+  el.actPanel?.classList.toggle("on", !isCollapsed);
+}
+
+function toggleSideChat() {
+  const isCollapsed = el.sideChat.classList.toggle("collapsed");
+  el.actChat?.classList.toggle("on", !isCollapsed);
+}
+
+el.actExplorer?.addEventListener("click", toggleExplorer);
+el.actPanel?.addEventListener("click", toggleBottomPanel);
+el.bottomPanelClose?.addEventListener("click", toggleBottomPanel);
+el.actChat?.addEventListener("click", toggleSideChat);
+el.sideChatClose?.addEventListener("click", toggleSideChat);
+el.explorerRefresh?.addEventListener("click", () => explorerTree.refresh());
+
+function updateThemeUI(theme) {
+  if (el.actTheme) {
+    el.actTheme.innerHTML = icon(theme === "dark" ? "sun" : "moon");
+    el.actTheme.title = theme === "dark" ? "Chuyển giao diện Sáng" : "Chuyển giao diện Tối";
+  }
+}
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorageSet("theme", next);
+  updateThemeUI(next);
+}
+
+const savedTheme = localStorageGet("theme");
+if (savedTheme) {
+  document.documentElement.setAttribute("data-theme", savedTheme);
+  updateThemeUI(savedTheme);
+}
+el.actTheme?.addEventListener("click", toggleTheme);
+
+window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === "b" || e.key === "B")) {
+    e.preventDefault();
+    toggleSideChat();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "b" || e.key === "B")) {
+    e.preventDefault();
+    toggleExplorer();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "j" || e.key === "J")) {
+    e.preventDefault();
+    toggleBottomPanel();
+    return;
+  }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "o" || e.key === "O")) {
+    e.preventDefault();
+    editorViewer.toggleOfficeFile();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "w" || e.key === "W")) {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    if (tag !== "input" && tag !== "textarea") {
+      if (editorViewer.getActiveTab() !== "office") {
+        e.preventDefault();
+        editorViewer.closeActiveTab();
+      }
+    }
+  }
+});
 function onQuestionChange(val) {
   app.selectedQuestionId = val;
   if (el.flowQuestion) el.flowQuestion.value = val;
@@ -744,7 +878,11 @@ async function reloadRoles() {
 }
 $("#open-settings").addEventListener("click", () =>
   openSettings({ roles: Object.values(app.meta), version: app.version, toast, ask }));
+el.actSettings?.addEventListener("click", () =>
+  openSettings({ roles: Object.values(app.meta), version: app.version, toast, ask }));
 $("#open-store").addEventListener("click", () =>
+  openStore({ toast, ask, onChange: () => reloadRoles().catch(e => toast(e.message, "bad")) }));
+el.actStore?.addEventListener("click", () =>
   openStore({ toast, ask, onChange: () => reloadRoles().catch(e => toast(e.message, "bad")) }));
 $("#open-office")?.addEventListener("click", () => {
   if (!app.wsId) {

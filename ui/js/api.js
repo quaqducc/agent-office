@@ -35,6 +35,8 @@ export const api = {
   reply: (checkpointId, decision, note = "") => call("POST", `/checkpoints/${enc(checkpointId)}/reply`, { decision, note }),
   queue: id => call("GET", `/workspaces/${enc(id)}/queue`),
   deleteQueueItem: (id, qid) => call("DELETE", `/workspaces/${enc(id)}/queue/${enc(qid)}`),
+  tree: (workspaceId, subpath = ".", depth = 1) => call("GET", `/workspaces/${enc(workspaceId)}/tree?path=${enc(subpath)}&depth=${depth}`),
+  file: (workspaceId, subpath) => call("GET", `/workspaces/${enc(workspaceId)}/files?path=${enc(subpath)}`),
   health: () => call("GET", "/health"),
   settings: () => call("GET", "/settings"),
   saveSettings: c => call("PUT", "/settings", c),

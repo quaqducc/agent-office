@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/vendor/prism.css">
   <link rel="stylesheet" href="/ui/styles.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect x='1' y='3' width='14' height='11' fill='%234453d6'/%3E%3Crect x='4' y='6' width='3' height='3' fill='%23fff'/%3E%3Crect x='9' y='6' width='3' height='3' fill='%23fff'/%3E%3Crect x='5' y='11' width='6' height='1' fill='%23fff'/%3E%3C/svg%3E">
 </head>
@@ -54,68 +55,115 @@
     </div>
   </section>
 
-  <main class="layout">
-    <section class="left">
-      <div class="stage" id="stage">
-        <div id="office" class="office" aria-label="Văn phòng — bấm vào nhân viên để xem chi tiết"></div>
-        <div id="onboard" class="onboard" hidden></div>
-        <div id="approvals" class="approvals" aria-live="assertive"></div>
+  <main class="ide-layout" id="ide-layout">
+    <!-- 1. Activity Bar (48px) -->
+    <nav class="activity-bar" id="activity-bar" aria-label="Thanh tác vụ">
+      <div class="act-group top">
+        <button id="act-explorer" class="act-btn on" type="button" title="Explorer (Ctrl+B)" aria-label="Explorer"><i data-icon="sidebar"></i></button>
+        <button id="act-panel" class="act-btn on" type="button" title="Bảng điều khiển (Ctrl+J)" aria-label="Bảng điều khiển"><i data-icon="panel"></i></button>
+        <button id="act-chat" class="act-btn on" type="button" title="Trò chuyện Manager (Ctrl+Alt+B)" aria-label="Trò chuyện"><i data-icon="chat"></i></button>
       </div>
-      <section class="feed-card" aria-labelledby="feed-title">
-        <header class="card-head">
-          <h2 id="feed-title">Hoạt động gần đây</h2>
-          <ul class="legend" aria-label="Chú thích trạng thái">
-            <li><i class="dot lg-working"></i>Đang làm</li>
-            <li><i class="dot lg-waiting"></i>Chờ role khác</li>
-            <li><i class="dot lg-approval"></i>Chờ bạn duyệt</li>
-            <li><i class="dot lg-idle"></i>Rảnh</li>
-          </ul>
-        </header>
-        <ol id="feed" class="feed"></ol>
-      </section>
+      <div class="spacer"></div>
+      <div class="act-group bottom">
+        <button id="act-store" class="act-btn" type="button" title="Kho role" aria-label="Kho role"><i data-icon="store"></i></button>
+        <button id="act-settings" class="act-btn" type="button" title="Cài đặt" aria-label="Cài đặt"><i data-icon="gear"></i></button>
+        <button id="act-theme" class="act-btn" type="button" title="Giao diện Sáng / Tối" aria-label="Giao diện"><i data-icon="sun"></i></button>
+      </div>
+    </nav>
+
+    <!-- 2. Sidebar Explorer (240px, resizable) -->
+    <aside class="sidebar-explorer" id="sidebar-explorer" aria-label="Cây thư mục Workspace">
+      <div class="sidebar-header">
+        <span class="sidebar-title" id="explorer-title">EXPLORER</span>
+        <button id="explorer-refresh" class="icon-btn small" type="button" title="Làm mới cây thư mục" aria-label="Làm mới"><i data-icon="refresh"></i></button>
+      </div>
+      <div class="explorer-tree" id="explorer-tree"></div>
+    </aside>
+
+    <!-- 3. Central Area (Editor tabs + Office / Code view + Bottom panel) -->
+    <section class="main-editor-area" id="main-editor-area">
+      <div class="editor-tabs-bar" role="tablist" id="editor-tabs" aria-label="Thẻ soạn thảo"></div>
+
+      <div class="editor-content-area" id="editor-content-area">
+        <!-- Pinned Office View -->
+        <div class="view-office" id="view-office">
+          <div class="stage" id="stage">
+            <div id="office" class="office" aria-label="Văn phòng — bấm vào nhân viên để xem chi tiết"></div>
+            <div id="onboard" class="onboard" hidden></div>
+            <div id="approvals" class="approvals" aria-live="assertive"></div>
+          </div>
+          <section class="feed-card" aria-labelledby="feed-title">
+            <header class="card-head">
+              <h2 id="feed-title">Hoạt động gần đây</h2>
+              <ul class="legend" aria-label="Chú thích trạng thái">
+                <li><i class="dot lg-working"></i>Đang làm</li>
+                <li><i class="dot lg-waiting"></i>Chờ role khác</li>
+                <li><i class="dot lg-approval"></i>Chờ bạn duyệt</li>
+                <li><i class="dot lg-idle"></i>Rảnh</li>
+              </ul>
+            </header>
+            <ol id="feed" class="feed"></ol>
+          </section>
+        </div>
+
+        <!-- Read-only Code Viewer -->
+        <div class="view-editor" id="view-editor" hidden></div>
+      </div>
+
+      <!-- Bottom Panel (Flow & Log with Question Selectors) -->
+      <div class="bottom-panel" id="bottom-panel">
+        <div class="bottom-panel-header">
+          <nav class="bottom-tabs" role="tablist" aria-label="Bảng bên dưới">
+            <button role="tab" id="bottom-tab-flow" data-bottom-tab="flow" class="bottom-tab on" aria-selected="true"><i data-icon="flow"></i>Luồng việc <span id="flow-count" class="count"></span></button>
+            <button role="tab" id="bottom-tab-log" data-bottom-tab="log" class="bottom-tab" aria-selected="false"><i data-icon="log"></i>Nhật ký <span id="log-count" class="count"></span></button>
+          </nav>
+          <div class="bottom-panel-actions">
+            <button id="bottom-panel-close" class="icon-btn small" type="button" title="Thu gọn bảng (Ctrl+J)" aria-label="Thu gọn"><i data-icon="x"></i></button>
+          </div>
+        </div>
+
+        <div class="bottom-panel-content">
+          <div class="bottom-tab-panel" id="panel-flow" data-panel="flow">
+            <div class="panel-toolbar">
+              <label class="question-bar"><span>Câu hỏi:</span><select id="flow-question" class="select question-select" aria-label="Chọn câu hỏi trong Luồng việc"></select></label>
+            </div>
+            <div id="flow" class="flow"></div>
+          </div>
+
+          <div class="bottom-tab-panel" id="panel-log" data-panel="log" hidden>
+            <div class="panel-toolbar">
+              <label class="question-bar"><span>Câu hỏi:</span><select id="log-question" class="select question-select" aria-label="Chọn câu hỏi trong Nhật ký"></select></label>
+            </div>
+            <div class="log-filters">
+              <div class="chips" id="log-type" role="group" aria-label="Lọc theo loại">
+                <button type="button" data-v="" class="on">Tất cả</button>
+                <button type="button" data-v="task">Việc</button>
+                <button type="button" data-v="message">Tin nhắn</button>
+                <button type="button" data-v="tool">Công cụ</button>
+                <button type="button" data-v="approval">Duyệt</button>
+                <button type="button" data-v="error">Lỗi</button>
+              </div>
+              <select id="log-role" class="select" aria-label="Lọc theo role"><option value="">Mọi người</option></select>
+            </div>
+            <div id="log" class="log"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <aside class="side">
-      <nav class="tabs" role="tablist" aria-label="Bảng bên">
-        <button role="tab" data-tab="chat" class="on" aria-selected="true"><i data-icon="chat"></i>Trò chuyện</button>
-        <button role="tab" data-tab="flow" aria-selected="false"><i data-icon="flow"></i>Luồng việc <span id="flow-count" class="count"></span></button>
-        <button role="tab" data-tab="log" aria-selected="false"><i data-icon="log"></i>Nhật ký <span id="log-count" class="count"></span></button>
-      </nav>
-
-      <div class="tab-panel" data-panel="chat">
-        <div id="queue-banner" class="queue-banner" hidden></div>
-        <div id="chat" class="chat" aria-live="polite"></div>
-        <form id="chat-form" class="composer">
-          <textarea id="chat-input" rows="1" placeholder="Nhắn cho Manager…" aria-label="Tin nhắn cho Manager"></textarea>
-          <button class="send" type="submit" aria-label="Gửi"><i data-icon="send"></i></button>
-          <p class="composer-hint">Enter để gửi · Shift+Enter xuống dòng</p>
-        </form>
+    <!-- 4. Side Chat Manager (340px) -->
+    <aside class="side-chat" id="side-chat" aria-label="Trò chuyện với Manager">
+      <div class="side-chat-header">
+        <span class="side-chat-title"><i data-icon="chat"></i>Trò chuyện Manager</span>
+        <button id="side-chat-close" class="icon-btn small" type="button" title="Ẩn khung chat (Ctrl+Alt+B)" aria-label="Ẩn"><i data-icon="x"></i></button>
       </div>
-
-      <div class="tab-panel" data-panel="flow" hidden>
-        <div class="panel-toolbar">
-          <label class="question-bar"><span>Câu hỏi:</span><select id="flow-question" class="select question-select" aria-label="Chọn câu hỏi trong Luồng việc"></select></label>
-        </div>
-        <div id="flow" class="flow"></div>
-      </div>
-
-      <div class="tab-panel" data-panel="log" hidden>
-        <div class="panel-toolbar">
-          <label class="question-bar"><span>Câu hỏi:</span><select id="log-question" class="select question-select" aria-label="Chọn câu hỏi trong Nhật ký"></select></label>
-        </div>
-        <div class="log-filters">
-          <div class="chips" id="log-type" role="group" aria-label="Lọc theo loại">
-            <button type="button" data-v="" class="on">Tất cả</button>
-            <button type="button" data-v="task">Việc</button>
-            <button type="button" data-v="message">Tin nhắn</button>
-            <button type="button" data-v="tool">Công cụ</button>
-            <button type="button" data-v="approval">Duyệt</button>
-            <button type="button" data-v="error">Lỗi</button>
-          </div>
-          <select id="log-role" class="select" aria-label="Lọc theo role"><option value="">Mọi người</option></select>
-        </div>
-        <div id="log" class="log"></div>
-      </div>
+      <div id="queue-banner" class="queue-banner" hidden></div>
+      <div id="chat" class="chat" aria-live="polite"></div>
+      <form id="chat-form" class="composer">
+        <textarea id="chat-input" rows="1" placeholder="Nhắn cho Manager…" aria-label="Tin nhắn cho Manager"></textarea>
+        <button class="send" type="submit" aria-label="Gửi"><i data-icon="send"></i></button>
+        <p class="composer-hint">Enter để gửi · Shift+Enter xuống dòng</p>
+      </form>
     </aside>
   </main>
 

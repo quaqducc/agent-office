@@ -15,6 +15,7 @@ import { Router, type RunnerFactory } from "./router.ts";
 import { runsDir, WorkspaceStore, type Workspace } from "./workspace.ts";
 import { browseDirectory, pickNativeFolder, type PickFolderResult } from "./fs-browse.ts";
 import { OFFICE_TEMPLATES } from "./offices.ts";
+import { listWorkspaceTree, readWorkspaceFile, HttpError as IdeFsError } from "./ide-fs.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -300,6 +301,18 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       if (m === "GET" && parts[2] === "runs") return json(200, store.runs(ctx.ws));
       if (m === "GET" && parts[2] === "config") return json(200, store.config(ctx.ws));
       if (m === "GET" && parts[2] === "approvals") return json(200, ctx.router.pendingApprovals());
+      if (m === "GET" && parts[2] === "tree") {
+        const subpath = url.searchParams.get("path") ?? ".";
+        const depth = parseInt(url.searchParams.get("depth") ?? "1", 10) || 1;
+        const nodes = await listWorkspaceTree(ctx.ws.path, subpath, depth);
+        return json(200, nodes);
+      }
+      if (m === "GET" && parts[2] === "files") {
+        const subpath = url.searchParams.get("path");
+        if (!subpath) throw new HttpError(400, "path query parameter is required");
+        const fileRes = await readWorkspaceFile(ctx.ws.path, subpath);
+        return json(200, fileRes);
+      }
       if (m === "GET" && parts[2] === "queue") return json(200, store.getQueue(ctx.ws));
       if (m === "DELETE" && parts[2] === "queue" && parts[3]) {
         const qid = parts[3];
@@ -340,10 +353,10 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
 
   const server = createServer((req, res) => {
     handle(req, res).catch(e => {
-      const status = e instanceof HttpError || e instanceof StoreError ? e.status : 500;
+      const status = e instanceof HttpError || e instanceof IdeFsError || e instanceof StoreError ? e.status : 500;
       if (!res.headersSent) res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...(status === 413 ? { connection: "close" } : {}) });
       const payload: any = { error: (e as Error).message };
-      if (e instanceof HttpError && e.extra) Object.assign(payload, e.extra);
+      if ((e instanceof HttpError || e instanceof IdeFsError) && e.extra) Object.assign(payload, e.extra);
       res.end(JSON.stringify(payload));
       if (status === 413) req.destroy();
     });
