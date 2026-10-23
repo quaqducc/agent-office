@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "sec-med-home-"));
+
 import { WorkspaceStore } from "../src/workspace.ts";
 import { checkToolCall } from "../src/guard.ts";
 import { startServer } from "../src/server.ts";
@@ -118,8 +121,8 @@ test("2.3 DoS limits on /diff, listWorkspaceTree, and Myers diff", async () => {
       writeFileSync(join(manyDir, `f_${i}.txt`), "x");
     }
     const tree = await listWorkspaceTree(wsDir, "many");
-    assert.equal(tree.length, 5000);
-    assert.equal((tree as any).truncated, true);
+    assert.equal(tree.entries.length, 5000);
+    assert.equal(tree.truncated, true);
   } finally {
     rmSync(wsDir, { recursive: true, force: true });
   }

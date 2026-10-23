@@ -98,7 +98,7 @@ test("listWorkspaceTree trả về đúng danh sách depth=1 và lọc bỏ .git
     fs.writeFileSync(path.join(wsDir, "README.md"), "# Hello");
     fs.writeFileSync(path.join(wsDir, ".env"), "KEY=VAL");
 
-    const nodes = await listWorkspaceTree(wsDir, ".", 1);
+    const { entries: nodes } = await listWorkspaceTree(wsDir, ".", 1);
     const names = nodes.map(n => n.name);
 
     assert.ok(names.includes("src"));

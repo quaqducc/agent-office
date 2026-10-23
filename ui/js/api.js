@@ -1,10 +1,22 @@
 // Thin client for the orchestrator API (same origin).
 
+function getToken() {
+  if (typeof document !== "undefined") {
+    const meta = document.querySelector('meta[name="company-token"]');
+    if (meta) return meta.getAttribute("content") || "";
+  }
+  if (typeof window !== "undefined" && window.__COMPANY_TOKEN__) {
+    return window.__COMPANY_TOKEN__;
+  }
+  return "";
+}
+
 async function call(method, path, body) {
   const headers = {};
   if (body) headers["content-type"] = "application/json";
-  if (typeof window !== "undefined" && window.__COMPANY_TOKEN__) {
-    headers["x-company-token"] = window.__COMPANY_TOKEN__;
+  const token = getToken();
+  if (token) {
+    headers["x-company-token"] = token;
   }
   const r = await fetch(path, {
     method,
@@ -34,8 +46,9 @@ export const api = {
   saveWorkspaceConfig: (id, config) => call("PUT", `/workspaces/${enc(id)}/config`, config),
   runs: id => call("GET", `/workspaces/${enc(id)}/runs`),
   events: runId => {
-    const token = typeof window !== "undefined" && window.__COMPANY_TOKEN__ ? `?token=${enc(window.__COMPANY_TOKEN__)}` : "";
-    return call("GET", `/runs/${enc(runId)}/events${token}`);
+    const token = getToken();
+    const tokenParam = token ? `?token=${enc(token)}` : "";
+    return call("GET", `/runs/${enc(runId)}/events${tokenParam}`);
   },
   send: (id, text) => call("POST", `/workspaces/${enc(id)}/messages`, { text }),
   stop: runId => call("POST", `/runs/${enc(runId)}/stop`, {}),
@@ -65,7 +78,9 @@ export const api = {
 
 /** Live TeamEvents for a workspace; returns an unsubscribe function. EventSource reconnects by itself. */
 export function subscribe(workspaceId, onEvent, onStatus) {
-  const es = new EventSource(`/events?workspace=${enc(workspaceId)}`);
+  const token = getToken();
+  const tokenParam = token ? `&token=${enc(token)}` : "";
+  const es = new EventSource(`/events?workspace=${enc(workspaceId)}${tokenParam}`);
   es.onmessage = m => onEvent(JSON.parse(m.data));
   es.onopen = () => onStatus?.("open");
   es.onerror = () => onStatus?.("error");

@@ -4,6 +4,9 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "server-ui-home-"));
+
 import { startServer } from "../src/server.ts";
 import { fakeFactory } from "./helpers/fake-runner.ts";
 

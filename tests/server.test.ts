@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "server-test-home-"));
+
 import { startServer, type ServerOptions } from "../src/server.ts";
 import { browseDirectory, clearDrivesCache, getDrives } from "../src/fs-browse.ts";
 import { fakeFactory, never, sleep } from "./helpers/fake-runner.ts";
@@ -656,8 +659,9 @@ test("ide endpoints: GET /tree và GET /files", async () => {
     // 1. GET /tree returns 200 and lists nodes
     const treeRes = await api("GET", `/workspaces/${ws.id}/tree?path=.&depth=1`);
     assert.equal(treeRes.status, 200);
-    assert.ok(Array.isArray(treeRes.json));
-    const names = treeRes.json.map((n: any) => n.name);
+    assert.ok(Array.isArray(treeRes.json.entries));
+    assert.equal(treeRes.json.truncated, false);
+    const names = treeRes.json.entries.map((n: any) => n.name);
     assert.ok(names.includes("README.md"));
     assert.ok(names.includes("src"));
     assert.ok(names.includes(".env"));

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, win32 } from "node:path";
+
+process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "guard-test-home-"));
+
 import { checkToolCall } from "../src/guard.ts";
 
 const WS = "C:\\Users\\Hi\\AppData\\Local\\Temp\\proj-a";

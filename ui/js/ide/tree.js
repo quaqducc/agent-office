@@ -18,7 +18,8 @@ export function createExplorerTree({ container, onFileSelect }) {
     container.innerHTML = `<div class="tree-loading">Đang tải cây thư mục…</div>`;
 
     try {
-      const nodes = await api.tree(workspaceId, ".", 1);
+      const res = await api.tree(workspaceId, ".", 1);
+      const nodes = Array.isArray(res) ? res : (res?.entries || []);
       folderCache.set(".", nodes);
       render();
     } catch (err) {
@@ -154,7 +155,8 @@ export function createExplorerTree({ container, onFileSelect }) {
     let children = folderCache.get(node.path);
     if (!children) {
       try {
-        children = await api.tree(currentWorkspaceId, node.path, 1);
+        const res = await api.tree(currentWorkspaceId, node.path, 1);
+        children = Array.isArray(res) ? res : (res?.entries || []);
         folderCache.set(node.path, children);
       } catch (err) {
         const errDiv = document.createElement("div");

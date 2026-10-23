@@ -173,11 +173,14 @@ Add `.company/` to your project's `.gitignore` if you do not want run logs in gi
   - Builder roles' shell is **not a sandbox**; review the log, and run the app in a container or VM
     for untrusted work.
 - **Local server.**
-  - The server listens on 127.0.0.1 only.
-  - It rejects foreign `Host` headers (DNS rebinding) and browser origins not listed in
-    `COMPANY_ALLOWED_ORIGINS`.
+  - The server listens on 127.0.0.1 only and requires an API token (passed via `x-company-token` or `?token=`) to protect against foreign websites (CSRF / DNS rebinding).
+  - It rejects foreign `Host` headers and browser origins not listed in `COMPANY_ALLOWED_ORIGINS`.
   - POST, PUT and DELETE requests must be JSON.
+  - Strict Content-Security-Policy (`script-src 'self'`) prevents inline script execution.
   - API keys never reach the browser; the UI only sees them masked.
+- **Role execution & sandboxing.**
+  - Builder roles' shell commands are filtered by regex and path guards as defense in depth, but they are **not a sandbox** and could invoke local processes or APIs.
+  - Review the run log, and run the app inside a container or VM whenever handling untrusted repositories or prompts.
 - **Cost.** There are no token limits by default. Each run's token count is shown in the office.
   To cap a run, set `limits.runTokenBudget` / `limits.maxTaskTokens` in `<workspace>/.company/config.json`.
 

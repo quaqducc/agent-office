@@ -2,7 +2,7 @@
 // orchestration data; writes and shell commands stay inside the workspace.
 // Defense in depth, not a sandbox — a determined shell command can still escape.
 // ponytail: regex-based shell check; replace with a container/sandbox per role when one exists.
-import { realpathSync } from "node:fs";
+import { realpathSync, existsSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import { appHome } from "./home.ts";
@@ -51,22 +51,30 @@ function within(api: PathApi, ws: string, p: string): { ok: boolean; why?: strin
 
 /** Credentials and keys: never readable, wherever they are. */
 function secret(api: PathApi, ws: string, p: string): string | undefined {
+  const isWin = api === path.win32 || (api === path && process.platform === "win32");
+
+  // Check ADS streams and DOS 8.3 short names only on win32 for segments below workspace
+  if (isWin) {
+    let q = p.replace(/^~(?=[\\/]|$)/, homedir());
+    const fullRaw = api.resolve(ws, q).replace(/\\/g, "/");
+    const rootRaw = api.resolve(ws, ".").replace(/\\/g, "/");
+    const rel = api.relative(rootRaw, fullRaw).replace(/\\/g, "/");
+    if (!rel.startsWith("..") && !api.isAbsolute(rel)) {
+      const segsBelowWs = rel.split("/").filter(Boolean);
+      for (const seg of segsBelowWs) {
+        if (seg.includes(":")) return "an alternate data stream";
+        if (/^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/.test(seg)) return "a DOS 8.3 short name";
+      }
+    }
+  }
+
   const full = norm(api, ws, p);
   const segs = full.split("/");
-
-  // Check ADS streams and DOS 8.3 short names
-  for (let i = 0; i < segs.length; i++) {
-    const seg = segs[i];
-    if (seg.includes(":")) {
-      const isDriveLetter = i === 0 && /^[a-z]:$/i.test(seg);
-      if (!isDriveLetter) return "an alternate data stream";
-    }
-    if (/~[0-9]+/.test(seg)) return "a DOS 8.3 short name";
-  }
 
   const rawName = segs.at(-1) ?? "";
   const name = rawName.replace(/[.\s]+$/, "");
   if (segs.map(s => s.replace(/[.\s]+$/, "")).includes(".company")) return "orchestration data (.company/)";
+  if (segs.map(s => s.replace(/[.\s]+$/, "")).includes(".git")) return "a secret (.git repository)";
   if (inside(full, norm(api, ws, appHome()))) return "a secret (Agent Company settings and API keys)";
   if (/^\.env(\.(?!example$|sample$|template$)[\w.-]+)?$/.test(name)) return "a secret (.env)";
   if (/\.(pem|key|pfx|p12)$/.test(name) || /^id_(rsa|ed25519|ecdsa|dsa)/.test(name)) return "a secret (key file)";
@@ -77,10 +85,27 @@ function secret(api: PathApi, ws: string, p: string): string | undefined {
   return undefined;
 }
 
-/** Where a path really points (symlinks resolved) when it exists on this machine. */
+/** Where a path really points (symlinks resolved) via nearest existing ancestor when on this machine. */
 function real(api: PathApi, ws: string, p: string): string | undefined {
   if (api !== path) return undefined; // tests of the other platform's rules
-  try { return realpathSync(api.resolve(ws, p.replace(/^~(?=[\\/]|$)/, homedir()))); } catch { return undefined; }
+  const resolved = api.resolve(ws, p.replace(/^~(?=[\\/]|$)/, homedir()));
+  let checkPath = resolved;
+  const tail: string[] = [];
+
+  while (!existsSync(checkPath)) {
+    const parent = api.dirname(checkPath);
+    if (parent === checkPath) break;
+    tail.unshift(api.basename(checkPath));
+    checkPath = parent;
+  }
+
+  if (!existsSync(checkPath)) return undefined;
+  try {
+    const realAncestor = realpathSync(checkPath);
+    return tail.length > 0 ? api.join(realAncestor, ...tail) : realAncestor;
+  } catch {
+    return undefined;
+  }
 }
 
 const block = (what: string, why: string): GuardResult =>

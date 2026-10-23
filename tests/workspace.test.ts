@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "workspace-test-home-"));
+
 import { WorkspaceStore } from "../src/workspace.ts";
 import { DEFAULT_LIMITS } from "../src/config.ts";
 import { roleIds } from "../src/library.ts";

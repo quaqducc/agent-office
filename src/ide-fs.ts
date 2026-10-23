@@ -69,14 +69,19 @@ const IGNORED_TREE_NAMES = new Set([
 
 /** Check whether a path contains sensitive credentials or secret configs. */
 export function isSecretPath(relPath: string): boolean {
-  const norm = relPath.replace(/\\/g, "/").toLowerCase();
-  // Check NTFS ADS or alternate streams
-  if (norm.split("/").some(s => s.includes(":"))) return true;
+  const isWin = process.platform === "win32";
+  const rawSegs = relPath.replace(/\\/g, "/").split("/").filter(Boolean);
 
+  if (isWin) {
+    if (rawSegs.some(s => s.includes(":"))) return true;
+    for (const rawSeg of rawSegs) {
+      if (/^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/.test(rawSeg)) return true;
+    }
+  }
+
+  const norm = relPath.replace(/\\/g, "/").toLowerCase();
   const segs = norm.split("/").filter(Boolean);
   for (const rawSeg of segs) {
-    // DOS 8.3 short name check
-    if (/~[0-9]+/.test(rawSeg)) return true;
     const s = rawSeg.replace(/[.\s]+$/, "");
     if (SENSITIVE_DIRS.has(s)) return true;
   }
@@ -101,26 +106,6 @@ function normCase(p: string): string {
  * prevents symlink escapes (even for nonexistent files), and blocks secrets.
  */
 export function assertSafeWorkspacePath(workspacePath: string, subpath: string): string {
-  // Reject NTFS streams, trailing spaces/dots, and 8.3 short names
-  const cleanSub = subpath.replace(/\\/g, "/");
-  const subSegments = cleanSub.split("/").filter(Boolean);
-  for (let i = 0; i < subSegments.length; i++) {
-    const seg = subSegments[i];
-    // Allow drive letter only at the start of an absolute path e.g. "C:"
-    if (seg.includes(":")) {
-      const isDriveLetter = i === 0 && /^[a-zA-Z]:$/.test(seg);
-      if (!isDriveLetter) {
-        throw new HttpError(403, "Access denied: Alternate Data Streams are not allowed");
-      }
-    }
-    if (seg !== "." && seg !== ".." && (seg.endsWith(" ") || seg.endsWith("."))) {
-      throw new HttpError(403, "Access denied: Trailing dots and spaces are not allowed");
-    }
-    if (/~[0-9]+/.test(seg)) {
-      throw new HttpError(403, "Access denied: 8.3 short names are not permitted");
-    }
-  }
-
   const root = path.resolve(workspacePath);
   const resolved = path.resolve(root, subpath);
 
@@ -130,6 +115,28 @@ export function assertSafeWorkspacePath(workspacePath: string, subpath: string):
   const sep = path.sep;
   if (nResolved !== nRoot && !nResolved.startsWith(nRoot.endsWith(sep) ? nRoot : nRoot + sep)) {
     throw new HttpError(403, "Access denied: Path escapes workspace root");
+  }
+
+  // Check segments strictly BELOW workspace root
+  const relFromRoot = path.relative(root, resolved);
+  const rawSub = subpath.replace(/\\/g, "/");
+  const subSegments = (path.isAbsolute(subpath) ? relFromRoot : rawSub)
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean);
+
+  const isWin = process.platform === "win32";
+  for (let i = 0; i < subSegments.length; i++) {
+    const seg = subSegments[i];
+    if (isWin && seg.includes(":")) {
+      throw new HttpError(403, "Access denied: Alternate Data Streams are not allowed");
+    }
+    if (seg !== "." && seg !== ".." && (seg.endsWith(" ") || seg.endsWith("."))) {
+      throw new HttpError(403, "Access denied: Trailing dots and spaces are not allowed");
+    }
+    if (isWin && /^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/.test(seg)) {
+      throw new HttpError(403, "Access denied: 8.3 short names are not permitted");
+    }
   }
 
   // 2. Symlink escape check via nearest existing ancestor
@@ -164,12 +171,17 @@ export function assertSafeWorkspacePath(workspacePath: string, subpath: string):
   return resolved;
 }
 
+export interface WorkspaceTreeResult {
+  entries: TreeNode[];
+  truncated: boolean;
+}
+
 /** Lists direct children (depth 1) of a workspace folder, filtering system/build dirs. */
 export async function listWorkspaceTree(
   wsPath: string,
   subpath: string = ".",
   _depth: number = 1,
-): Promise<TreeNode[]> {
+): Promise<WorkspaceTreeResult> {
   const fullPath = assertSafeWorkspacePath(wsPath, subpath);
   if (!existsSync(fullPath)) {
     throw new HttpError(404, "path not found");
@@ -182,6 +194,7 @@ export async function listWorkspaceTree(
   const entries = await fs.readdir(fullPath, { withFileTypes: true });
   const root = path.resolve(wsPath);
   const nodes: TreeNode[] = [];
+  let truncated = false;
 
   for (const e of entries) {
     if (IGNORED_TREE_NAMES.has(e.name)) continue;
@@ -219,7 +232,7 @@ export async function listWorkspaceTree(
     }
 
     if (nodes.length >= 5000) {
-      (nodes as any).truncated = true;
+      truncated = true;
       break;
     }
 
@@ -231,7 +244,7 @@ export async function listWorkspaceTree(
     return a.name.localeCompare(b.name);
   });
 
-  return nodes;
+  return { entries: nodes, truncated };
 }
 
 /** Reads a text file safely up to 2MB, checking for null-byte binary and secrets. */

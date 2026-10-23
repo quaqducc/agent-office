@@ -4,8 +4,17 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export function appHome(): string {
-  return process.env.AGENT_COMPANY_HOME || join(homedir(), ".agent-company");
+export function appHome(allowDefaultInTest = false): string {
+  const home = process.env.AGENT_COMPANY_HOME || join(homedir(), ".agent-company");
+  if (process.env.NODE_TEST_CONTEXT && !allowDefaultInTest) {
+    const realHome = join(homedir(), ".agent-company");
+    if (home === realHome) {
+      throw new Error(
+        `Safety error: Tests running under node:test must not touch real app home (${realHome}). Set AGENT_COMPANY_HOME to a temporary directory.`
+      );
+    }
+  }
+  return home;
 }
 
 export function homePaths(home = appHome()) {

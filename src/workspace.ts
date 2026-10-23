@@ -262,14 +262,17 @@ export class WorkspaceStore {
     try {
       const parsed = JSON.parse(readFileSync(f, "utf8"));
       if (!Array.isArray(parsed)) return [];
-      return parsed.map((q: any) => {
-        if (!q || typeof q !== "object") return q;
+      const result: QueuedMessage[] = [];
+      for (const q of parsed) {
+        if (!q || typeof q !== "object" || Array.isArray(q)) continue;
         const expected = this.computeQueueHmac({ id: q.id, text: q.text, createdAt: q.createdAt });
         if (!q.hmac || q.hmac !== expected) {
-          return { ...q, untrusted: true };
+          result.push({ ...q, untrusted: true });
+        } else {
+          result.push(q);
         }
-        return q;
-      });
+      }
+      return result;
     } catch {
       return [];
     }
@@ -311,11 +314,10 @@ export class WorkspaceStore {
   dequeue(ws: Workspace): QueuedMessage | undefined {
     const current = this.getQueue(ws);
     if (!current.length) return undefined;
-    const item = current[0];
-    if (item.untrusted) {
-      return undefined; // Do not auto-run untrusted items
-    }
-    const updated = current.slice(1);
+    const trustedIdx = current.findIndex(i => !i.untrusted);
+    if (trustedIdx === -1) return undefined;
+    const item = current[trustedIdx];
+    const updated = [...current.slice(0, trustedIdx), ...current.slice(trustedIdx + 1)];
     this.safeWriteQueue(ws, updated);
     return item;
   }

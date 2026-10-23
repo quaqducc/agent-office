@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, extname, join, normalize, sep } from "node:path";
@@ -29,6 +30,7 @@ export interface ServerOptions {
   createRunner?: (ws: Workspace, router: () => Router) => RunnerFactory;
   pickFolder?: () => Promise<PickFolderResult>;
   apiToken?: string | boolean;
+  requireToken?: boolean;
 }
 
 /** `sig`: signature of installed roles, workspace roles and rooms; rebuilt when changed and idle. */
@@ -66,8 +68,22 @@ function uiFile(urlPath: string): string | undefined {
 }
 
 export async function startServer(o: ServerOptions = {}): Promise<{ url: string; token?: string; close(): Promise<void> }> {
+  if (process.env.NODE_TEST_CONTEXT && !o.dataDir) {
+    const realHome = join(homedir(), ".agent-company");
+    const currentHome = process.env.AGENT_COMPANY_HOME || realHome;
+    if (currentHome === realHome) {
+      throw new Error(
+        `Safety error: startServer under node:test must not touch real app home (${realHome}). Provide dataDir or set AGENT_COMPANY_HOME.`
+      );
+    }
+  }
+
   const apiToken = typeof o.apiToken === "string"
     ? o.apiToken
+    : o.requireToken === true
+    ? randomBytes(32).toString("hex")
+    : o.requireToken === false
+    ? undefined
     : o.apiToken === false
     ? undefined
     : (o.apiToken === true || (!process.env.NODE_TEST_CONTEXT && !o.dataDir)
@@ -201,12 +217,12 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       if (url.pathname === "/") {
         let html = readFileSync(file, "utf8");
         if (apiToken) {
-          html = html.replace("</head>", `<script>window.__COMPANY_TOKEN__ = ${JSON.stringify(apiToken)};</script></head>`);
+          html = html.replace("<head>", `<head><meta name="company-token" content="${apiToken}">`);
         }
         res.writeHead(200, {
           "content-type": "text/html; charset=utf-8", "cache-control": "no-cache",
           "x-frame-options": "DENY", "x-content-type-options": "nosniff",
-          "content-security-policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'",
+          "content-security-policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'",
         });
         return res.end(html);
       }

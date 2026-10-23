@@ -10,7 +10,11 @@ test("defaults to ~/.agent-company and honours AGENT_COMPANY_HOME", () => {
   const saved = process.env.AGENT_COMPANY_HOME;
   try {
     delete process.env.AGENT_COMPANY_HOME;
-    assert.equal(appHome(), join(homedir(), ".agent-company"));
+    assert.throws(
+      () => appHome(),
+      /Safety error: Tests running under node:test must not touch real app home/
+    );
+    assert.equal(appHome(true), join(homedir(), ".agent-company"));
     process.env.AGENT_COMPANY_HOME = join(tmpdir(), "ac-x");
     assert.equal(appHome(), join(tmpdir(), "ac-x"));
     const p = homePaths();

@@ -319,14 +319,12 @@ The frontmatter parser is deliberately minimal (one `key: value` per line). See 
 |---|---|---|
 | Tool guard | `guard.ts`, pi `tool_call` hook in `pi-runner.ts` | Read tools may read anywhere **except secrets**: `.env*`, key files, `.ssh`, `.aws`, `.claude`, `.gnupg`, `.docker`, the app home, `.company/`. Symlinks are resolved and globs are checked. `grep` over the home folder is refused. Writes and shell commands stay inside the workspace. The shell check also blocks `~`, `$HOME`, `%USERPROFILE%`, bare `cd`, env dumps, `..` and absolute paths outside the workspace (device files like `/dev/null` are allowed). |
 | Approvals | `router.ts` | `approval_required` checkpoints can only be answered by the user's API call. The Manager is told it cannot approve. |
-| Local server | `server.ts` | Binds to 127.0.0.1 only. Rejects foreign `Host` headers (DNS rebinding) and browser `Origin`s not listed in `COMPANY_ALLOWED_ORIGINS`. POST, PUT and DELETE must be `application/json`. Sends CSP, `X-Frame-Options: DENY` and `nosniff`. |
+| Local server | `server.ts` | Binds to 127.0.0.1 only. Generates an API token (passed via `x-company-token` header or `?token=` parameter) and injects it via `<meta name="company-token">` to protect against malicious websites (CSRF / DNS rebinding). Rejects foreign `Host` headers and browser `Origin`s not listed in `COMPANY_ALLOWED_ORIGINS`. POST, PUT and DELETE must be `application/json`. Sends strict CSP (`script-src 'self'`), `X-Frame-Options: DENY` and `nosniff`. |
 | Secrets at rest | `settings.ts`, `event-log.ts` | Keys exist only in `config.json` (0600 on POSIX) and the generated `pi/models.json`. Run logs redact key-like strings and fields named like keys. |
 | Store integrity | `store.ts` | Hashes come from the package's own `index.json`. Install is staged and verified before anything moves. Names and paths are validated. |
 | Release hygiene | `scripts/pack-check.mjs` | Fails if the tarball would contain `.env`, `models.json`/`auth.json`, `data/`, `.company/`, tests, catalog files, key-like strings or the author's local paths. |
 
-The guard is defense in depth, **not a sandbox** (`ponytail:` note in `guard.ts`). A builder
-role's `bash` can still escape with enough creativity. Untrusted work belongs in a container or VM;
-a per-role sandbox is the planned upgrade.
+The guard is defense in depth with regex and path checks as secondary defenses, **not a sandbox** (`ponytail:` note in `guard.ts`). Because a builder role's `bash` is not sandboxed, it could theoretically call local APIs or bypass string filters with enough creativity. Untrusted work belongs in a container or VM; a per-role sandbox is the planned upgrade.
 
 ---
 

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "sec-high-home-"));
+
 import { assertSafeWorkspacePath, isSecretPath } from "../src/ide-fs.ts";
 import { checkToolCall } from "../src/guard.ts";
 import { WorkspaceStore } from "../src/workspace.ts";
