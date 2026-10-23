@@ -63,7 +63,7 @@ function secret(api: PathApi, ws: string, p: string): string | undefined {
       const segsBelowWs = rel.split("/").filter(Boolean);
       for (const seg of segsBelowWs) {
         if (seg.includes(":")) return "an alternate data stream";
-        if (/^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/.test(seg)) return "a DOS 8.3 short name";
+        if (/^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/i.test(seg)) return "a DOS 8.3 short name";
       }
     }
   }

@@ -73,10 +73,10 @@ test("Item D: 8.3 short name and colon checks only apply below workspace and on 
   const wsWithShortName = join(base, "QUANGD~1", "my-project");
   mkdirSync(wsWithShortName, { recursive: true });
   writeFileSync(join(wsWithShortName, "app.ts"), "export const a = 1;");
-  writeFileSync(join(wsWithShortName, "backup~1.txt"), "hello backup");
+  writeFileSync(join(wsWithShortName, "my-backup~1.txt"), "hello backup");
 
   try {
-    const { assertSafeWorkspacePath } = await import("../src/ide-fs.ts");
+    const { assertSafeWorkspacePath, isSecretPath } = await import("../src/ide-fs.ts");
     const { checkToolCall } = await import("../src/guard.ts");
     const path = await import("node:path");
 
@@ -87,14 +87,32 @@ test("Item D: 8.3 short name and colon checks only apply below workspace and on 
     const r1 = checkToolCall("read", { path: "app.ts" }, wsWithShortName);
     assert.equal(r1.block, false);
 
-    // 2. Filename backup~1.txt is allowed (lowercase, not 8.3 short name)
+    // 2. Filename with prefix > 6 chars (my-backup~1.txt) is not an 8.3 short name
     assert.doesNotThrow(() => {
-      assertSafeWorkspacePath(wsWithShortName, "backup~1.txt");
+      assertSafeWorkspacePath(wsWithShortName, "my-backup~1.txt");
     });
-    const r2 = checkToolCall("read", { path: "backup~1.txt" }, wsWithShortName);
+    const r2 = checkToolCall("read", { path: "my-backup~1.txt" }, wsWithShortName);
     assert.equal(r2.block, false);
 
-    // 3. Uppercase 8.3 format (PROGRA~1, SECRE~1.TXT, ABCDEF~1) is blocked on win32
+    // 3. Lowercase 8.3 short names (compan~1/queue.json, git~1/config) MUST be blocked on win32
+    if (process.platform === "win32") {
+      assert.equal(isSecretPath("compan~1/queue.json"), true);
+      assert.equal(isSecretPath("git~1/config"), true);
+
+      assert.throws(() => {
+        assertSafeWorkspacePath(wsWithShortName, "compan~1/queue.json");
+      }, /8\.3 short names/i);
+      assert.throws(() => {
+        assertSafeWorkspacePath(wsWithShortName, "git~1/config");
+      }, /8\.3 short names/i);
+    }
+
+    const rCompan = checkToolCall("read", { path: "compan~1/queue.json" }, wsWithShortName, path.win32);
+    assert.equal(rCompan.block, true);
+    const rGit = checkToolCall("read", { path: "git~1/config" }, wsWithShortName, path.win32);
+    assert.equal(rGit.block, true);
+
+    // 4. Uppercase 8.3 format (PROGRA~1, SECRE~1.TXT, ABCDEF~1) is blocked on win32
     if (process.platform === "win32") {
       assert.throws(() => {
         assertSafeWorkspacePath(wsWithShortName, "PROGRA~1");
@@ -106,7 +124,7 @@ test("Item D: 8.3 short name and colon checks only apply below workspace and on 
       assert.equal(r3.block, true);
     }
 
-    // 4. Colon check only on win32: POSIX allows colons in filename
+    // 5. Colon check only on win32: POSIX allows colons in filename
     const posixWs = "/home/user/project";
     const rPosix = checkToolCall("read", { path: "file:name.txt" }, posixWs, path.posix);
     assert.equal(rPosix.block, false);

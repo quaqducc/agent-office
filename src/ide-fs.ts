@@ -75,7 +75,7 @@ export function isSecretPath(relPath: string): boolean {
   if (isWin) {
     if (rawSegs.some(s => s.includes(":"))) return true;
     for (const rawSeg of rawSegs) {
-      if (/^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/.test(rawSeg)) return true;
+      if (/^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/i.test(rawSeg)) return true;
     }
   }
 
@@ -134,7 +134,7 @@ export function assertSafeWorkspacePath(workspacePath: string, subpath: string):
     if (seg !== "." && seg !== ".." && (seg.endsWith(" ") || seg.endsWith("."))) {
       throw new HttpError(403, "Access denied: Trailing dots and spaces are not allowed");
     }
-    if (isWin && /^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/.test(seg)) {
+    if (isWin && /^[A-Z0-9]{1,6}~[0-9]+(\.[A-Z0-9]{1,3})?$/i.test(seg)) {
       throw new HttpError(403, "Access denied: 8.3 short names are not permitted");
     }
   }
