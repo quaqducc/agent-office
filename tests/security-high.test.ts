@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 
 process.env.AGENT_COMPANY_HOME = mkdtempSync(join(tmpdir(), "sec-high-home-"));
 
@@ -15,7 +15,7 @@ function freshDir(prefix: string) {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-test("1.1 NTFS alternate data streams and short names blocked", () => {
+test("1.1 NTFS alternate data streams and short names blocked", { skip: process.platform !== "win32" }, () => {
   const ws = freshDir("sec-high-ads-");
   try {
     // 1. ADS with ::$DATA or stream name
@@ -47,6 +47,28 @@ test("1.1 NTFS alternate data streams and short names blocked", () => {
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
+});
+
+test("1.1 Guard blocks ADS and short names on win32 path API (cross-platform)", () => {
+  const fakeWs = "C:\\projects\\demo";
+
+  const r1 = checkToolCall("read", { path: ".env::$DATA" }, fakeWs, win32);
+  assert.equal(r1.block, true);
+
+  const r2 = checkToolCall("read", { path: "secret.key:stream" }, fakeWs, win32);
+  assert.equal(r2.block, true);
+
+  const r3 = checkToolCall("read", { path: ".env. " }, fakeWs, win32);
+  assert.equal(r3.block, true);
+
+  const r4 = checkToolCall("read", { path: "SECRE~1" }, fakeWs, win32);
+  assert.equal(r4.block, true);
+
+  const r5 = checkToolCall("read", { path: "compan~1/queue.json" }, fakeWs, win32);
+  assert.equal(r5.block, true);
+
+  const r6 = checkToolCall("read", { path: "git~1/config" }, fakeWs, win32);
+  assert.equal(r6.block, true);
 });
 
 test("1.2 Symlink to sensitive targets rejected in assertSafeWorkspacePath and guard", () => {
