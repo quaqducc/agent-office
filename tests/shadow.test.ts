@@ -20,7 +20,7 @@ async function makeTempWorkspace(): Promise<string> {
 
 test("captureShadow ghi nhận trạng thái 'A' khi file chưa tồn tại trên đĩa", async () => {
   const ws = await makeTempWorkspace();
-  const runId = "run-1";
+  const runId = "11111111-1111-1111-1111-111111111111";
 
   await captureShadow(ws, runId, "src/new-file.ts");
 
@@ -37,7 +37,7 @@ test("captureShadow ghi nhận trạng thái 'A' khi file chưa tồn tại trê
 
 test("captureShadow sao chép file gốc và ghi nhận 'M' khi file đã tồn tại", async () => {
   const ws = await makeTempWorkspace();
-  const runId = "run-2";
+  const runId = "22222222-2222-2222-2222-222222222222";
 
   await fs.mkdir(join(ws, "src"), { recursive: true });
   await fs.writeFile(join(ws, "src", "app.ts"), "const original = 1;", "utf-8");
@@ -57,7 +57,7 @@ test("captureShadow sao chép file gốc và ghi nhận 'M' khi file đã tồn 
 
 test("captureShadow không ghi đè lại file đã được sao chép trong cùng một runId", async () => {
   const ws = await makeTempWorkspace();
-  const runId = "run-3";
+  const runId = "33333333-3333-3333-3333-333333333333";
 
   await fs.writeFile(join(ws, "index.js"), "version 1", "utf-8");
 
@@ -79,7 +79,7 @@ test("captureShadow không ghi đè lại file đã được sao chép trong cù
 
 test("captureShadow bỏ qua file vượt quá 256KB nhưng vẫn ghi nhận metadata", async () => {
   const ws = await makeTempWorkspace();
-  const runId = "run-4";
+  const runId = "44444444-4444-4444-4444-444444444444";
 
   // Create 300KB file
   const bigContent = "A".repeat(300 * 1024);
@@ -103,8 +103,8 @@ test("enforceShadowQuota xoá run cũ nhất khi tổng dung lượng thư mục
   const ws = await makeTempWorkspace();
 
   // Create two runs with files
-  const run1 = "run-old";
-  const run2 = "run-new";
+  const run1 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const run2 = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
   await fs.mkdir(shadowRunDir(ws, run1), { recursive: true });
   await fs.writeFile(join(shadowRunDir(ws, run1), "file1.txt"), "A".repeat(1000), "utf-8");
@@ -137,7 +137,7 @@ test("captureShadow không bao giờ ném lỗi ra ngoài khi gặp lỗi I/O b�
 
 test("hook tool_call awaits captureShadow before tool writes to disk preventing race condition", async () => {
   const ws = await makeTempWorkspace();
-  const runId = "run-race";
+  const runId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
   const filePath = "config.json";
   await fs.writeFile(join(ws, filePath), '{"version": 1}', "utf-8");
 

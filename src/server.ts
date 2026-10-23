@@ -85,6 +85,7 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     }
   }
   let port = 0;
+  let pickingFolder = false;
   const ctxs = new Map<string, Ctx>();
   const sse = new Set<{ res: ServerResponse; workspaceId?: string }>();
 
@@ -262,11 +263,15 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       return json(200, OFFICE_TEMPLATES);
     }
     if (m === "POST" && url.pathname === "/fs/pick-folder") {
+      if (pickingFolder) throw new HttpError(409, "A folder picker dialog is already open");
+      pickingFolder = true;
       try {
         const picker = o.pickFolder ?? pickNativeFolder;
         return json(200, await picker());
       } catch (e) {
         throw new HttpError(400, (e as Error).message);
+      } finally {
+        pickingFolder = false;
       }
     }
     if (m === "POST" && url.pathname === "/fs/browse") {
@@ -367,8 +372,8 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
       if (m === "GET" && parts[2] === "changes") {
         const runId = url.searchParams.get("runId");
         if (!runId || !runId.trim()) throw new HttpError(400, "runId query parameter is required");
-        if (runId.includes("..") || runId.includes("/") || runId.includes("\\")) {
-          throw new HttpError(400, "invalid runId");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId)) {
+          throw new HttpError(400, "invalid runId: must be a valid UUID");
         }
         const changes = await getRunChanges(ctx.ws.path, runId);
         return json(200, changes);
@@ -377,8 +382,8 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         const runId = url.searchParams.get("runId");
         const subpath = url.searchParams.get("path");
         if (!runId || !runId.trim()) throw new HttpError(400, "runId query parameter is required");
-        if (runId.includes("..") || runId.includes("/") || runId.includes("\\")) {
-          throw new HttpError(400, "invalid runId");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId)) {
+          throw new HttpError(400, "invalid runId: must be a valid UUID");
         }
         if (!subpath || !subpath.trim()) throw new HttpError(400, "path query parameter is required");
 

@@ -70,7 +70,7 @@ function secret(api: PathApi, ws: string, p: string): string | undefined {
   if (inside(full, norm(api, ws, appHome()))) return "a secret (Agent Company settings and API keys)";
   if (/^\.env(\.(?!example$|sample$|template$)[\w.-]+)?$/.test(name)) return "a secret (.env)";
   if (/\.(pem|key|pfx|p12)$/.test(name) || /^id_(rsa|ed25519|ecdsa|dsa)/.test(name)) return "a secret (key file)";
-  if (segs.map(s => s.replace(/[.\s]+$/, "")).some(s => [".ssh", ".aws", ".claude", ".gnupg", ".docker", ".agent-company"].includes(s)) || name === ".claude.json") {
+  if (segs.map(s => s.replace(/[.\s]+$/, "")).some(s => [".ssh", ".aws", ".claude", ".gnupg", ".docker", ".agent-company", ".kube"].includes(s)) || [".claude.json", ".npmrc", ".netrc", ".git-credentials", ".pypirc", "credentials.json"].includes(name)) {
     return "a secret (credentials directory)";
   }
   if (/\/pi-runtime\/agent(\/|$)/.test(full) || /\/\.config\/gcloud(\/|$)/.test(full)) return "a secret (model/API credentials)";
@@ -126,7 +126,7 @@ export function checkToolCall(tool: string, input: unknown, workspace: string, a
       || /(^|[;&|(]\s*)(cd|chdir|Set-Location)\s*($|[;&|)])/i.test(cmd)) {
       return block("this command", "reaching into the home directory");
     }
-    if (/(^|[\\/\s"'=(])\.(agent-company|ssh|aws|gnupg|claude)\b|\.claude\.json\b/i.test(cmd)) return block("this command", "touching a secrets folder");
+    if (/(^|[\\/\s"'=(])\.(agent-company|ssh|aws|gnupg|claude|kube)\b|\.(claude\.json|npmrc|netrc|git-credentials|pypirc)\b|credentials\.json\b/i.test(cmd)) return block("this command", "touching a secrets folder");
     if (/(^|[\s"'=(\\/])\.\.[\\/]/.test(cmd)) return block("this command", "reaching outside the workspace via ..");
     const found = [
       ...cmd.matchAll(/(?<!\w)[A-Za-z]:[\\/](?![\\/])[^\s"'|&;<>]*/g),       // C:\x, D:/x (not the "s:" in https://)

@@ -16,6 +16,7 @@ export interface ShadowManifest {
 
 export const MAX_SHADOW_FILE_SIZE = 256 * 1024; // 256KB per file
 export const MAX_TOTAL_SHADOW_BYTES = 20 * 1024 * 1024; // 20MB total quota
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function shadowBaseDir(wsPath: string): string {
   return join(wsPath, ".company", "shadow");
@@ -33,11 +34,23 @@ function normalizeRelPath(relPath: string): string {
   return relPath.replace(/\\/g, "/").replace(/^\.\//, "").trim();
 }
 
+const manifestQueues = new Map<string, Promise<void>>();
+
 /**
  * Capture shadow copy of a file before a tool modifies it in a run.
  * Guaranteed never to throw or disrupt the role's execution.
  */
 export async function captureShadow(wsPath: string, runId: string, filePath: string): Promise<void> {
+  const queueKey = `${wsPath}:${runId}`;
+  const prev = manifestQueues.get(queueKey) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    await doCaptureShadow(wsPath, runId, filePath);
+  }).catch(() => {});
+  manifestQueues.set(queueKey, next);
+  await next;
+}
+
+async function doCaptureShadow(wsPath: string, runId: string, filePath: string): Promise<void> {
   try {
     if (!wsPath || !runId || !filePath) return;
 
@@ -47,6 +60,11 @@ export async function captureShadow(wsPath: string, runId: string, filePath: str
     const relFromWs = relative(wsPath, fullTarget);
     if (relFromWs.startsWith("..") || relFromWs.startsWith(".company")) {
       return; // Do not shadow files outside workspace or inside .company
+    }
+
+    if (existsSync(fullTarget)) {
+      const s = await fs.lstat(fullTarget);
+      if (s.isSymbolicLink()) return;
     }
 
     const cleanRelPath = normalizeRelPath(relFromWs);
@@ -202,6 +220,9 @@ async function getDirSizeAndMtime(dirPath: string): Promise<{ totalBytes: number
  * Retrieve list of file changes for a specific run from its manifest.
  */
 export async function getRunChanges(wsPath: string, runId: string): Promise<Array<{ path: string; status: "A" | "M" }>> {
+  if (!UUID_REGEX.test(runId)) {
+    throw new Error("Invalid runId");
+  }
   const manifestPath = manifestFilePath(wsPath, runId);
   if (!existsSync(manifestPath)) return [];
 
@@ -224,8 +245,15 @@ export async function getRunChanges(wsPath: string, runId: string): Promise<Arra
  * Returns null if file was created newly ("A") or no shadow copy exists.
  */
 export async function getShadowFileContent(wsPath: string, runId: string, relPath: string): Promise<string | null> {
+  if (!UUID_REGEX.test(runId)) {
+    throw new Error("Invalid runId");
+  }
   const norm = normalizeRelPath(relPath);
-  const shadowFile = join(shadowRunDir(wsPath, runId), norm);
+  const runDir = resolve(shadowRunDir(wsPath, runId));
+  const shadowFile = resolve(runDir, norm);
+  if (!shadowFile.startsWith(runDir + sep) && shadowFile !== runDir) {
+    throw new Error("Shadow file escapes run directory");
+  }
   if (!existsSync(shadowFile)) return null;
 
   try {

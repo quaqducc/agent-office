@@ -41,7 +41,11 @@ export async function pickNativeFolder(
     ].join("; ");
 
     try {
-      const { stdout } = await run("powershell", [
+      const sysRoot = process.env.SystemRoot || process.env.windir || "C:\\Windows";
+      const psExe = join(sysRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      const psCommand = customExec ? "powershell" : (existsSync(psExe) ? psExe : "powershell");
+
+      const { stdout } = await run(psCommand, [
         "-NoProfile",
         "-NonInteractive",
         "-WindowStyle",

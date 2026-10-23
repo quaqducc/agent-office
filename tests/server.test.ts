@@ -775,7 +775,7 @@ test("ide endpoints: GET /changes và GET /diff (shadow diff, jail, secret check
   const wsDir = ws.path;
 
   try {
-    const runId = "test-run-diff-1";
+    const runId = "11111111-2222-3333-4444-555555555555";
     const shadowDir = join(wsDir, ".company", "shadow", runId);
     mkdirSync(shadowDir, { recursive: true });
 

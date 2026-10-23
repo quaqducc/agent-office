@@ -54,6 +54,7 @@ const SENSITIVE_DIRS = new Set([
   ".gnupg",
   ".docker",
   ".agent-company",
+  ".kube",
 ]);
 
 const IGNORED_TREE_NAMES = new Set([
@@ -82,7 +83,7 @@ export function isSecretPath(relPath: string): boolean {
 
   const rawName = segs.at(-1) ?? "";
   const name = rawName.replace(/[.\s]+$/, "");
-  if (name === ".claude.json") return true;
+  if ([".claude.json", ".npmrc", ".netrc", ".git-credentials", ".pypirc", "credentials.json"].includes(name)) return true;
   if (/^\.env(\.(?!example$|sample$|template$)[\w.-]+)?$/i.test(name)) return true;
   if (/\.(pem|key|pfx|p12)$/i.test(name)) return true;
   if (/^id_(rsa|ed25519|ecdsa|dsa)/i.test(name)) return true;
