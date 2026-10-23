@@ -19,6 +19,7 @@ async function setup(script: Script, extraOpts: Partial<ServerOptions> = {}) {
   const srv = await startServer({
     port: 0, dataDir: tmp("data-"),
     createRunner: (_ws, router) => fakeFactory((role, text) => script(role, text, router())),
+    pickFolder: async () => ({ canceled: true }),
     ...extraOpts,
   });
   const api = async (method: string, path: string, body?: unknown) => {
@@ -389,7 +390,12 @@ test("marks runs left active by a crash as interrupted on start", async () => {
   const store = new WorkspaceStore(dataDir);
   const ws = store.add(tmp("proj-"));
   store.appendRun(ws, { runId: "r-old", startedAt: "t0", status: "active", firstMessage: "hi", tokens: 0 });
-  const srv = await startServer({ port: 0, dataDir, createRunner: () => fakeFactory(async () => "") });
+  const srv = await startServer({
+    port: 0,
+    dataDir,
+    createRunner: () => fakeFactory(async () => ""),
+    pickFolder: async () => ({ canceled: true }),
+  });
   try {
     assert.equal(store.runs(ws)[0].status, "interrupted");
   } finally { await srv.close(); }
@@ -554,22 +560,27 @@ test("queue: hàng đợi còn sau khi tạo lại server", async () => {
       }
       return "ok";
     }),
+    pickFolder: async () => ({ canceled: true }),
   });
-  const api1 = async (m: string, p: string, b?: any) => {
-    const r = await fetch(srv1.url + p, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined });
-    return { status: r.status, json: await r.json() as any };
-  };
-  const ws = (await api1("POST", "/workspaces", { path: projDir, name: "PersistTest" })).json;
+  let ws: any;
+  try {
+    const api1 = async (m: string, p: string, b?: any) => {
+      const r = await fetch(srv1.url + p, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined });
+      return { status: r.status, json: await r.json() as any };
+    };
+    ws = (await api1("POST", "/workspaces", { path: projDir, name: "PersistTest" })).json;
 
-  await api1("POST", `/workspaces/${ws.id}/messages`, { text: "run 1" });
-  await api1("POST", `/workspaces/${ws.id}/messages`, { text: "queued 2" });
-  await api1("POST", `/workspaces/${ws.id}/messages`, { text: "queued 3" });
+    await api1("POST", `/workspaces/${ws.id}/messages`, { text: "run 1" });
+    await api1("POST", `/workspaces/${ws.id}/messages`, { text: "queued 2" });
+    await api1("POST", `/workspaces/${ws.id}/messages`, { text: "queued 3" });
 
-  const qBefore = await api1("GET", `/workspaces/${ws.id}/queue`);
-  assert.equal(qBefore.json.length, 2);
+    const qBefore = await api1("GET", `/workspaces/${ws.id}/queue`);
+    assert.equal(qBefore.json.length, 2);
 
-  unblockS1?.();
-  await srv1.close();
+    unblockS1?.();
+  } finally {
+    await srv1.close();
+  }
 
   const srv2 = await startServer({
     port: 0, dataDir,
@@ -579,6 +590,7 @@ test("queue: hàng đợi còn sau khi tạo lại server", async () => {
       }
       return "ok";
     }),
+    pickFolder: async () => ({ canceled: true }),
   });
   const api2 = async (m: string, p: string, b?: any) => {
     const r = await fetch(srv2.url + p, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined });

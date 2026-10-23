@@ -484,6 +484,8 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     token: apiToken,
     close: () => new Promise<void>(r => {
       for (const c of sse) c.res.end();
+      for (const c of ctxs.values()) c.router.dispose();
+      ctxs.clear();
       server.closeAllConnections();
       server.close(() => r());
     }),
