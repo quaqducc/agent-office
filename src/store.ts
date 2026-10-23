@@ -23,7 +23,7 @@ export class StoreError extends Error {
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-const RAW = "https://raw.githubusercontent.com/quaqducc/agent-company";
+const RAW = "https://raw.githubusercontent.com/quaqducc/agent-office";
 
 /** Local catalog in a git checkout; otherwise GitHub at v<version> (main only when that tag does not exist). */
 export async function resolveCatalogBase(o: { localDir?: string; version?: string; fetchImpl?: Fetch } = {}): Promise<CatalogBase> {

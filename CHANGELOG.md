@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-10-23
+
+- **IDE đơn giản**:
+  - Explorer cây thư mục workspace với lazy loading và biểu tượng loại file trực quan.
+  - Trình biên tập code nhanh hai lớp (textarea + PrismJS highlight) hỗ trợ `Ctrl+S`, lưu tệp nguyên tử và phát hiện xung đột ghi đè.
+  - Xem thay đổi (Diff Viewer) theo từng lần chạy dựa trên Shadow Backup và thuật toán Myers diff thuần túy.
+  - Panel đáy mở rộng với tab Lệnh (Command Log) và Kết quả test (Test Results: hỗ trợ `node:test` Spec/TAP và pytest) cùng thanh kéo tùy chỉnh độ cao.
+- **Hàng đợi tin nhắn (Message Queue)**: Gửi nhiều tin nhắn liên tiếp mà không bị chồng lấn hay xung đột lượt chạy; tự động thực thi tuần tự lần lượt từng tin.
+- **Chọn câu hỏi trong Luồng việc & Nhật ký**: Bộ chọn (Question Selector) đồng bộ trên tất cả các tab (Luồng việc, Nhật ký, Lệnh, Test), lọc dữ liệu hiển thị theo từng câu hỏi của người dùng.
+- **Nút Browse kiểu VS Code**: Mở hộp thoại chọn thư mục gốc của hệ điều hành (Windows PowerShell OpenFolderDialog, macOS AppleScript, Linux zenity/kdialog) với timeout an toàn và console ngầm.
+- **Nhân vật đi lại**: Hoạt hình nhân vật di chuyển giữa các phòng làm việc theo lộ trình cửa và hành lang, tương tác trao đổi trực quan thay thế cho đường kẻ mũi tên.
+- **Đổi tên workspace**: Cho phép đổi tên hiển thị của workspace trực tiếp trên thanh đầu trang.
+- **Tuỳ biến văn phòng & Template**: Thiết lập phòng làm việc, phân bổ chỗ ngồi cho các role và lưu cấu hình template trong hộp thoại Văn phòng.
+- **Bảo mật**: Cơ chế jail workspace nghiêm ngặt, chặn path traversal, chặn symlink escape trỏ ra ngoài workspace root và ngăn chặn truy cập các tệp bí mật (`.env`, `.company`, `.git`, SSH keys).
+
 ## 0.1.0 — 2026-10-21
 
 First public release.

@@ -11,13 +11,13 @@
 **Spec:** `docs/superpowers/specs/2026-10-21-packaging-design.md`
 
 ## Global Constraints
-- Package name `@quaqducc/agent-company`, command `agent-company`, `engines.node >=22.19.0`, version `0.1.0`.
+- Package name `@quaqduc/agent-company`, command `agent-company`, `engines.node >=22.19.0`, version `0.1.0`.
 - App home: `AGENT_COMPANY_HOME` env, default `<os.homedir()>/.agent-company`; never touch `~/.claude` or `~/.pi`.
 - Server binds 127.0.0.1, default port 4317; keep Host/Origin/CSP/frame protections.
 - No secrets, run logs, `.company/`, `data/`, or `D:/tools/...` paths in the repo tree or the npm tarball.
 - Cross-platform: Windows, macOS, Linux — use `node:path` for the current OS (tests may exercise both `path.win32` and `path.posix`).
 - Base roles in the package: `manager`, `researcher`, `developer`, `critic`. All other roles live in `catalog/`.
-- Catalog downloads: `https://raw.githubusercontent.com/quaqducc/agent-company/<ref>/catalog/<path>`, ref = `v<version>` if the tag exists else `main`; sha256 verified; from a git checkout use local `catalog/`.
+- Catalog downloads: `https://raw.githubusercontent.com/quaqducc/agent-office/<ref>/catalog/<path>`, ref = `v<version>` if the tag exists else `main`; sha256 verified; from a git checkout use local `catalog/`.
 - Every role file gets an `owns:` line; the Manager's ownership table is generated from installed roles.
 
 ## Review Focus
@@ -94,7 +94,7 @@
 **Files:** Create `src/store.ts`; modify `src/server.ts`; test `tests/store.test.ts`.
 
 **Interfaces:**
-- `catalogBase(): Promise<{ kind: "local"; dir } | { kind: "remote"; baseUrl }>` — local if `CATALOG_DIR` exists (git checkout); else `https://raw.githubusercontent.com/quaqducc/agent-company/v<VERSION>/catalog/` if `HEAD .../index.json` is 200, else `.../main/catalog/`.
+- `catalogBase(): Promise<{ kind: "local"; dir } | { kind: "remote"; baseUrl }>` — local if `CATALOG_DIR` exists (git checkout); else `https://raw.githubusercontent.com/quaqducc/agent-office/v<VERSION>/catalog/` if `HEAD .../index.json` is 200, else `.../main/catalog/`.
 - `loadCatalog(base, fetchImpl)`; `storeState()` → `{ roles: [{ id, name, description, owns, skills, installed: "base" | "store" | false, updateAvailable }] }`;
 - `installRole(id)`: download role + persona + missing skills into a temp dir under the home, verify every sha256, then rename into `library/` (atomic per item; on any failure remove the temp dir), update `installed.json` `{ [roleId]: { sha256, ref } }`; `uninstallRole(id)` (base → 409; remove role file; remove skills no longer used by any installed role).
 - Routes: `GET /store`, `POST /store/roles/:id/install`, `DELETE /store/roles/:id`.
@@ -108,7 +108,7 @@
 **Interfaces:**
 - `bin/agent-company.js`: loads `../dist/main.js` if present else `../src/main.ts` (dev), forwards `process.argv`; exits 1 with a clear message on Node < 22.19.
 - `main.ts`: `parseArgs(argv): { cmd: "start" | "doctor" | "chat" | "import" | "help" | "version"; port?: number; home?: string; open: boolean; rest: string[] }`; `start` (ensureHome, startServer, print URL, open browser unless `--no-open` using `start`/`open`/`xdg-open`), `doctor` (Node version, home writable, providers configured, each provider `testProvider` with default model, search backend), `chat <folder> [name]` (old terminal client), `import --from-pi-runtime <dir> [--workspaces <file>]`.
-- `package.json`: `name @quaqducc/agent-company`, `private` removed, `bin { "agent-company": "bin/agent-company.js" }`, `files ["bin","dist","ui","library","README.md","LICENSE","THIRD_PARTY_NOTICES.md","CHANGELOG.md"]`, `engines`, `repository`, `license MIT`, deps: `@earendil-works/pi-coding-agent` + 7 siblings pinned `1.0.4`, `marked`, `typebox`; scripts `build` (`tsc -p tsconfig.build.json`), `prepack` (`npm run build`), `test`, `check`, `start` (`node src/main.ts start`), `catalog` (`node scripts/build-catalog.mjs`).
+- `package.json`: `name @quaqduc/agent-company`, `private` removed, `bin { "agent-company": "bin/agent-company.js" }`, `files ["bin","dist","ui","library","README.md","LICENSE","THIRD_PARTY_NOTICES.md","CHANGELOG.md"]`, `engines`, `repository`, `license MIT`, deps: `@earendil-works/pi-coding-agent` + 7 siblings pinned `1.0.4`, `marked`, `typebox`; scripts `build` (`tsc -p tsconfig.build.json`), `prepack` (`npm run build`), `test`, `check`, `start` (`node src/main.ts start`), `catalog` (`node scripts/build-catalog.mjs`).
 - `tsconfig.build.json`: `outDir dist`, `rootDir src`, `rewriteRelativeImportExtensions: true`, emit JS only.
 - `pack-check.mjs`: fails if the tarball file list contains `.env`, `models.json`, `auth.json`, `data/`, `.company/`, `catalog/`, `tests/`, `.superpowers/` or any file containing `D:/tools` / `D:\\tools`.
 

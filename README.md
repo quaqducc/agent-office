@@ -13,22 +13,22 @@ Bring your own model: any OpenAI-compatible, Anthropic or Gemini endpoint. Built
 You need **Node.js 22.19 or newer** ([nodejs.org](https://nodejs.org)).
 
 ```sh
-npm install -g @quaqducc/agent-company
+npm install -g @quaqduc/agent-company
 ```
 
 Or use the installer, which checks your Node.js version first:
 
 ```sh
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/quaqducc/agent-company/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/quaqducc/agent-office/main/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/quaqducc/agent-company/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/quaqducc/agent-office/main/install.ps1 | iex
 ```
 
-From source: `git clone https://github.com/quaqducc/agent-company.git && cd agent-company && npm install && npm start`.
+From source: `git clone https://github.com/quaqducc/agent-office.git && cd agent-office && npm install && npm start`.
 
 ## First run
 
@@ -57,8 +57,52 @@ Then add a **workspace** (a project folder the team works in) and message the Ma
 Native Gemini (`https://generativelanguage.googleapis.com/v1beta`, API type "Gemini (native)") is
 available under **Nâng cao** (Advanced).
 
+## Interface Overview
+
+```
++--------------------------------------------------------------------------------------------------+
+|  Agent Office   [Workspace Name (click to rename)]           [Văn phòng] [Kho role] [Cài đặt]    |
++---+-----------------------------+------------------------------------+---------------------------+
+| A | Explorer / Thay đổi         | Code Editor                        | Trò chuyện (Manager)      |
+| c | --------------------------- | ---------------------------------- | ------------------------- |
+| t | > src                       | [tab: app.js] [tab: diff: index.js]| Hàng đợi tin nhắn         |
+| i |   v components              |                                    | [1] Follow-up prompt...   |
+| v |     - button.ts             | 1 | function init() {              | [2] Another prompt...     |
+| i |     - modal.ts              | 2 |   setupOffice();               | ------------------------- |
+| t |   - server.ts               | 3 | }                              | Manager: Em đã giao việc  |
+| y |   - types.ts                |                                    | cho Developer xử lý...    |
+|   |                             |                                    |                           |
+| B | Thay đổi:                   |                                    |                           |
+| a | M src/server.ts (+12/-4)    |                                    |                           |
+| r | A src/modal.ts (+45/-0)     |                                    |                           |
+|   +-----------------------------+------------------------------------+                           |
+|   | Bottom Panel (Lệnh / Test / Luồng việc / Nhật ký)                |                           |
+|   | [Luồng việc] [Nhật ký] [Lệnh (3)] [Kết quả test: PASS]           |                           |
+|   | ---------------------------------------------------------------- |                           |
+|   | ✔ npm test: 249 passed, 0 failed (4.8s)                          |                           |
++---+------------------------------------------------------------------+---------------------------+
+```
+
 ## Using it
 
+- **The office & Customization**:
+  - each role sits at an assigned desk; 2D pixel characters walk along corridors and through doors to interact and deliver handoffs;
+  - configure rooms, desk layouts and room templates via the **Văn phòng** (Office) dialog;
+  - rename workspaces anytime by clicking the workspace title;
+  - click any character to view its active tasks, messages and tool calls.
+- **Message queue**:
+  - send prompts or follow-up messages anytime without waiting for the active run to finish;
+  - incoming requests enter a persistent FIFO queue and execute sequentially without overlap;
+  - view and remove queued items directly in the chat panel.
+- **Embedded IDE**:
+  - **Explorer**: browse workspace files with lazy loading and file icons; create new files with `+`;
+  - **Code Editor**: edit files with fast PrismJS syntax highlighting, atomic saving (`Ctrl+S`), CRLF/LF preservation, and 409 conflict detection against disk changes;
+  - **Thay đổi (Diff Viewer)**: inspect pre-edit shadow backups vs current file changes per run using pure Myers diff with inline additions/deletions badges;
+  - **Bottom Panel**:
+    - **Lệnh (Command Log)**: chronological log of shell executions (`bash`, `powershell`) with statuses, durations, and output modal dialog with 1-click clipboard copy;
+    - **Kết quả test (Test Results)**: auto-detects test runners (`node:test` Spec/TAP, `pytest`) with pass/fail badges, summary metrics, test case breakdown, and raw output details;
+    - **Luồng việc & Nhật ký**: task hierarchy and event log with synchronized **Question Selector** dropdown to filter data per question;
+    - **Shortcuts & Resize**: drag `.bottom-panel-resizer` to resize (persisted in localStorage); press `Ctrl+J` to toggle bottom panel, `Ctrl+S` to save file, `Ctrl+B` to toggle sidebar.
 - **Settings** (gear icon):
   - add several providers;
   - set one default model for the team, with optional per-role overrides (e.g. a strong coding
@@ -74,11 +118,6 @@ available under **Nâng cao** (Advanced).
   (OmniRoute's Google Search, OpenRouter's web search) or through your own
   [SearXNG](https://docs.searxng.org) instance, which needs the JSON format enabled.
   "Tự động" (Auto) uses the endpoint's search when available and falls back to SearXNG.
-- **The office**:
-  - each role sits at a desk and shows whether it is working, waiting on another role, waiting
-    for your approval, or idle;
-  - handoffs fly between desks;
-  - click a character to see its tasks, messages and tool calls.
 - **Side panel**:
   - **Trò chuyện**: chat with the Manager;
   - **Luồng việc**: the task tree;

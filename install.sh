@@ -1,10 +1,10 @@
 #!/bin/sh
 # Agent Company installer (macOS / Linux):
-#   curl -fsSL https://raw.githubusercontent.com/quaqducc/agent-company/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/quaqducc/agent-office/main/install.sh | sh
 # Installs the npm package globally. Needs Node.js 22.19+ (with npm) already installed.
 set -eu
 
-PKG="@quaqducc/agent-company"
+PKG="@quaqduc/agent-company"
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   echo "Agent Company needs Node.js 22.19 or newer (with npm)."

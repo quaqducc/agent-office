@@ -27,7 +27,15 @@ jobs:
       - run: npm run build
       - run: node scripts/pack-check.mjs   # scans the freshly built dist/
       - run: node scripts/pack-smoke.mjs
-      - run: npm publish --access public --provenance
+      - name: Publish to npm
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VER=$(node -p "require('./package.json').version")
+          if npm view "$PKG_NAME@$PKG_VER" version >/dev/null 2>&1; then
+            echo "Version $PKG_NAME@$PKG_VER is already published on npm, skipping publish."
+          else
+            npm publish --access public --provenance
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: GitHub Release

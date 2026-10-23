@@ -20,7 +20,7 @@ const fail = msg => { console.error(`pack-smoke: ${msg}`); process.exitCode = 1;
 try {
   const [{ filename }] = JSON.parse(npm(["pack", "--json", "--pack-destination", tmp], { cwd: root }));
   npm(["install", "-g", "--prefix", prefix, "--no-audit", "--no-fund", join(tmp, filename)], { stdio: ["ignore", "ignore", "inherit"] });
-  const pkgDir = join(prefix, win ? "" : "lib", "node_modules", "@quaqducc", "agent-company");
+  const pkgDir = join(prefix, win ? "" : "lib", "node_modules", "@quaqduc", "agent-company");
   const shim = win ? join(prefix, "agent-company.cmd") : join(prefix, "bin", "agent-company");
 
   const version = execFileSync(shim, ["--version"], { encoding: "utf8", env, shell: win }).trim();

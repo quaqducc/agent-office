@@ -1,8 +1,8 @@
 # Agent Company installer (Windows PowerShell):
-#   irm https://raw.githubusercontent.com/quaqducc/agent-company/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/quaqducc/agent-office/main/install.ps1 | iex
 # Installs the npm package globally. Needs Node.js 22.19+ (with npm) already installed.
 $ErrorActionPreference = "Stop"
-$pkg = "@quaqducc/agent-company"
+$pkg = "@quaqduc/agent-company"
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 $npm = Get-Command npm -ErrorAction SilentlyContinue

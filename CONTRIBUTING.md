@@ -5,7 +5,7 @@ Thanks for helping! Issues and pull requests are welcome. Start with [docs/ARCHI
 ## Setup
 
 ```sh
-git clone https://github.com/quaqducc/agent-company.git
+git clone https://github.com/quaqducc/agent-office.git
 cd agent-company
 npm install
 npm start            # runs the app from the TypeScript sources (Node 22.19+)

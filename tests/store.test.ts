@@ -92,7 +92,7 @@ test("remote ref falls back to main when the version tag is missing", async () =
   const fakeFetch = (async (u: any) => { seen.push(String(u)); return new Response("", { status: String(u).includes("/v9.9.9/") ? 404 : 200 }); }) as typeof fetch;
   const base = await resolveCatalogBase({ localDir: join(tmpdir(), "no-such-catalog"), version: "9.9.9", fetchImpl: fakeFetch });
   assert.equal(base.kind, "remote");
-  if (base.kind === "remote") assert.equal(base.baseUrl, "https://raw.githubusercontent.com/quaqducc/agent-company/main/catalog/");
+  if (base.kind === "remote") assert.equal(base.baseUrl, "https://raw.githubusercontent.com/quaqducc/agent-office/main/catalog/");
   assert.ok(seen[0].includes("/v9.9.9/catalog/index.json"));
   const local = await resolveCatalogBase({ localDir: CATALOG_DIR, version: "0.1.0", fetchImpl: fakeFetch });
   assert.equal(local.kind, "local");

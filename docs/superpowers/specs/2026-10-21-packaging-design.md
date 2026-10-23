@@ -5,7 +5,7 @@ Date: 2026-10-21 · Status: draft for approval · Builds on: orchestrator, offic
 ## 1. Intent
 
 Turn Agent Company from "runs on the author's machine" into a public, installable app on GitHub
-(github.com/quaqducc/agent-company), installed the way public coding harnesses are (Claude Code, pi,
+(github.com/quaqducc/agent-office), installed the way public coding harnesses are (Claude Code, pi,
 opencode, Codex): one command, works on Windows, macOS and Linux. A new user installs a small base,
 enters an **API endpoint URL + API key**, picks a model and starts working. More roles are downloaded
 on demand from an in-app role store. OmniRoute is **not** bundled; it is just one endpoint a user may
@@ -14,7 +14,7 @@ enter. The author keeps using the app on their own machine (with OmniRoute as th
 ## 2. Decisions made with the user
 
 - Distribution: public GitHub repo; install from GitHub works immediately, plus automatic npm
-  publishing of `@quaqducc/agent-company` from GitHub Actions on a `vX.Y.Z` tag (the user creates the
+  publishing of `@quaqduc/agent-company` from GitHub Actions on a `vX.Y.Z` tag (the user creates the
   npm account/token once). The command users run is `agent-company`.
 - Base install ships 4 roles: **manager, researcher, developer, critic** (+ the skills they need).
   All other roles are downloaded on demand from the role store.
@@ -60,7 +60,7 @@ By the designer (the user may override):
 
 ## 3. Goals
 
-1. `npm i -g @quaqducc/agent-company` (or `npm i -g github:quaqducc/agent-company`) → `agent-company`
+1. `npm i -g @quaqduc/agent-company` (or `npm i -g github:quaqducc/agent-office`) → `agent-company`
    starts the server and opens the browser at the office UI. Same on Windows/macOS/Linux, Node ≥ 22.19.
 2. First run: a setup screen asks endpoint URL + API key (+ API type), lists the endpoint's models,
    tests a call, saves. Nothing else is required to start.
@@ -161,7 +161,7 @@ Server binds 127.0.0.1 only (unchanged).
 ### 7.6 Role store
 - `catalog/index.json`: `{ version, roles: [{ id, name, description, skills[], persona?, files[] }],
   skills: [{ name, files: [{ path, sha256, size }], license, source }] }`.
-- Download URL: `https://raw.githubusercontent.com/quaqducc/agent-company/v<appVersion>/catalog/<path>`
+- Download URL: `https://raw.githubusercontent.com/quaqducc/agent-office/v<appVersion>/catalog/<path>`
   (dev: from the local `catalog/` dir when running from a git checkout).
 - Install = download role file (+ persona) + missing skills, verify sha256, write atomically into
   `~/.agent-company/library/`; uninstall removes the role (skills kept if another role uses them).

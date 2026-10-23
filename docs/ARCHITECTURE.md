@@ -5,7 +5,7 @@ system does, how the pieces fit together, where each responsibility lives, and t
 follows. Read [README.md](../README.md) first for what users see. Read this document before
 changing code.
 
-Status: v0.1.0. It is packaged for npm (`@quaqducc/agent-company`) and GitHub, and CI runs on
+Status: v0.2.0. It is packaged for npm (`@quaqduc/agent-company`) and GitHub, and CI runs on
 Ubuntu, Windows and macOS with Node 22.19 and 24.
 
 ---
@@ -228,7 +228,7 @@ The frontmatter parser is deliberately minimal (one `key: value` per line). See 
 - **Where files come from.**
   - In a git checkout, the local `catalog/` is used.
   - In an installed package, the trusted `index.json` is shipped inside the package, and files
-    are downloaded from `raw.githubusercontent.com/quaqducc/agent-company/v<version>/catalog/`.
+    are downloaded from `raw.githubusercontent.com/quaqducc/agent-office/v<version>/catalog/`.
   - The `main` branch is used only when that tag returns 404. A network error does not switch to
     `main`.
 - **Install** (`installRole`):
@@ -469,7 +469,7 @@ node tests/e2e/ui-demo.ts      # scripted team, no model → http://127.0.0.1:43
   - `delegation.ts`: the Manager must delegate setup or fix work instead of doing it itself. One run
     can use more than a million tokens;
   - `smoke.ts`: a minimal end-to-end check.
-- **CI** (`ci.yml`) runs on push to master and on PRs. Matrix: ubuntu/windows/macos × Node
+- **CI** (`ci.yml`) runs on push to main and on PRs. Matrix: ubuntu/windows/macos × Node
   22.19/24. Steps: `npm ci`, check, test, catalog check, build, pack-check, pack-smoke.
 - **Release** (`release.yml`) runs on a `v*` tag. The tag must equal the `package.json` version.
   It runs the same checks, then `npm publish --access public --provenance` (secret `NPM_TOKEN`)
