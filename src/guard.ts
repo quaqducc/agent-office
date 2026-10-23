@@ -35,6 +35,17 @@ function within(api: PathApi, ws: string, p: string): { ok: boolean; why?: strin
   const full = norm(api, ws, p);
   if (!inside(full, root)) return { ok: false, why: "outside the workspace" };
   if (inside(full, `${root}/.company`)) return { ok: false, why: "orchestration data (.company/)" };
+
+  // Check real target if it exists
+  const realP = real(api, ws, p);
+  if (realP) {
+    const realFull = norm(api, ws, realP);
+    if (!inside(realFull, root)) return { ok: false, why: "resolving outside the workspace" };
+    if (inside(realFull, `${root}/.company`)) return { ok: false, why: "orchestration data (.company/)" };
+    const whyReal = secret(api, ws, realP);
+    if (whyReal) return { ok: false, why: whyReal };
+  }
+
   return { ok: true };
 }
 
@@ -42,12 +53,24 @@ function within(api: PathApi, ws: string, p: string): { ok: boolean; why?: strin
 function secret(api: PathApi, ws: string, p: string): string | undefined {
   const full = norm(api, ws, p);
   const segs = full.split("/");
-  const name = segs.at(-1) ?? "";
-  if (segs.includes(".company")) return "orchestration data (.company/)";
+
+  // Check ADS streams and DOS 8.3 short names
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i];
+    if (seg.includes(":")) {
+      const isDriveLetter = i === 0 && /^[a-z]:$/i.test(seg);
+      if (!isDriveLetter) return "an alternate data stream";
+    }
+    if (/~[0-9]+/.test(seg)) return "a DOS 8.3 short name";
+  }
+
+  const rawName = segs.at(-1) ?? "";
+  const name = rawName.replace(/[.\s]+$/, "");
+  if (segs.map(s => s.replace(/[.\s]+$/, "")).includes(".company")) return "orchestration data (.company/)";
   if (inside(full, norm(api, ws, appHome()))) return "a secret (Agent Company settings and API keys)";
   if (/^\.env(\.(?!example$|sample$|template$)[\w.-]+)?$/.test(name)) return "a secret (.env)";
   if (/\.(pem|key|pfx|p12)$/.test(name) || /^id_(rsa|ed25519|ecdsa|dsa)/.test(name)) return "a secret (key file)";
-  if (segs.some(s => [".ssh", ".aws", ".claude", ".gnupg", ".docker", ".agent-company"].includes(s)) || name === ".claude.json") {
+  if (segs.map(s => s.replace(/[.\s]+$/, "")).some(s => [".ssh", ".aws", ".claude", ".gnupg", ".docker", ".agent-company"].includes(s)) || name === ".claude.json") {
     return "a secret (credentials directory)";
   }
   if (/\/pi-runtime\/agent(\/|$)/.test(full) || /\/\.config\/gcloud(\/|$)/.test(full)) return "a secret (model/API credentials)";

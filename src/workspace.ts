@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_LIMITS } from "./config.ts";
@@ -35,6 +35,8 @@ export interface QueuedMessage {
   id: string;
   text: string;
   createdAt: string;
+  hmac?: string;
+  untrusted?: boolean;
 }
 
 export interface WorkspaceConfig {
@@ -235,23 +237,57 @@ export class WorkspaceStore {
     return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : [];
   }
 
+  private getQueueSecret(): string {
+    const p = join(this.dataDir, "queue-secret");
+    if (existsSync(p)) {
+      try {
+        return readFileSync(p, "utf8").trim();
+      } catch {}
+    }
+    const sec = randomBytes(32).toString("hex");
+    try {
+      writeFileSync(p, sec, { encoding: "utf8", mode: 0o600 });
+    } catch {}
+    return sec;
+  }
+
+  computeQueueHmac(item: { id: string; text: string; createdAt: string }): string {
+    const sec = this.getQueueSecret();
+    return createHmac("sha256", sec).update(`${item.id}:${item.text}:${item.createdAt}`).digest("hex");
+  }
+
   getQueue(ws: Workspace): QueuedMessage[] {
     const f = queueFile(ws);
     if (!existsSync(f)) return [];
     try {
       const parsed = JSON.parse(readFileSync(f, "utf8"));
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((q: any) => {
+        if (!q || typeof q !== "object") return q;
+        const expected = this.computeQueueHmac({ id: q.id, text: q.text, createdAt: q.createdAt });
+        if (!q.hmac || q.hmac !== expected) {
+          return { ...q, untrusted: true };
+        }
+        return q;
+      });
     } catch {
       return [];
     }
   }
 
   enqueue(ws: Workspace, text: string): { item: QueuedMessage; position: number } {
+    if (typeof text !== "string" || text.length > 20000) {
+      throw new Error("Message text too large (max 20000 characters)");
+    }
     const current = this.getQueue(ws);
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    const hmac = this.computeQueueHmac({ id, text, createdAt });
     const item: QueuedMessage = {
-      id: randomUUID().slice(0, 8),
+      id,
       text,
-      createdAt: new Date().toISOString(),
+      createdAt,
+      hmac,
     };
     const updated = [...current, item];
     writeFileSync(queueFile(ws), JSON.stringify(updated, null, 2));
@@ -262,6 +298,9 @@ export class WorkspaceStore {
     const current = this.getQueue(ws);
     if (!current.length) return undefined;
     const item = current[0];
+    if (item.untrusted) {
+      return undefined; // Do not auto-run untrusted items
+    }
     const updated = current.slice(1);
     writeFileSync(queueFile(ws), JSON.stringify(updated, null, 2));
     return item;

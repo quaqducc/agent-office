@@ -69,10 +69,19 @@ const IGNORED_TREE_NAMES = new Set([
 /** Check whether a path contains sensitive credentials or secret configs. */
 export function isSecretPath(relPath: string): boolean {
   const norm = relPath.replace(/\\/g, "/").toLowerCase();
-  const segs = norm.split("/").filter(Boolean);
-  if (segs.some(s => SENSITIVE_DIRS.has(s))) return true;
+  // Check NTFS ADS or alternate streams
+  if (norm.split("/").some(s => s.includes(":"))) return true;
 
-  const name = segs.at(-1) ?? "";
+  const segs = norm.split("/").filter(Boolean);
+  for (const rawSeg of segs) {
+    // DOS 8.3 short name check
+    if (/~[0-9]+/.test(rawSeg)) return true;
+    const s = rawSeg.replace(/[.\s]+$/, "");
+    if (SENSITIVE_DIRS.has(s)) return true;
+  }
+
+  const rawName = segs.at(-1) ?? "";
+  const name = rawName.replace(/[.\s]+$/, "");
   if (name === ".claude.json") return true;
   if (/^\.env(\.(?!example$|sample$|template$)[\w.-]+)?$/i.test(name)) return true;
   if (/\.(pem|key|pfx|p12)$/i.test(name)) return true;
@@ -91,6 +100,26 @@ function normCase(p: string): string {
  * prevents symlink escapes (even for nonexistent files), and blocks secrets.
  */
 export function assertSafeWorkspacePath(workspacePath: string, subpath: string): string {
+  // Reject NTFS streams, trailing spaces/dots, and 8.3 short names
+  const cleanSub = subpath.replace(/\\/g, "/");
+  const subSegments = cleanSub.split("/").filter(Boolean);
+  for (let i = 0; i < subSegments.length; i++) {
+    const seg = subSegments[i];
+    // Allow drive letter only at the start of an absolute path e.g. "C:"
+    if (seg.includes(":")) {
+      const isDriveLetter = i === 0 && /^[a-zA-Z]:$/.test(seg);
+      if (!isDriveLetter) {
+        throw new HttpError(403, "Access denied: Alternate Data Streams are not allowed");
+      }
+    }
+    if (seg !== "." && seg !== ".." && (seg.endsWith(" ") || seg.endsWith("."))) {
+      throw new HttpError(403, "Access denied: Trailing dots and spaces are not allowed");
+    }
+    if (/~[0-9]+/.test(seg)) {
+      throw new HttpError(403, "Access denied: 8.3 short names are not permitted");
+    }
+  }
+
   const root = path.resolve(workspacePath);
   const resolved = path.resolve(root, subpath);
 
@@ -117,6 +146,11 @@ export function assertSafeWorkspacePath(workspacePath: string, subpath: string):
     const nRealRoot = normCase(realRoot);
     if (nRealAncestor !== nRealRoot && !nRealAncestor.startsWith(nRealRoot.endsWith(sep) ? nRealRoot : nRealRoot + sep)) {
       throw new HttpError(403, "Access denied: Symlink resolves outside workspace root");
+    }
+    // Check if the real path points to a secret target
+    const realRel = path.relative(realRoot, realAncestor);
+    if (isSecretPath(realRel)) {
+      throw new HttpError(403, "Access denied: Symlink resolves to sensitive target");
     }
   }
 

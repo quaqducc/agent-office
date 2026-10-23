@@ -1,5 +1,5 @@
-import { existsSync, promises as fs } from "node:fs";
-import { join, resolve, relative, dirname } from "node:path";
+import { existsSync, realpathSync, promises as fs } from "node:fs";
+import { join, resolve, relative, dirname, sep } from "node:path";
 import { createHash } from "node:crypto";
 
 export interface ShadowFileEntry {
@@ -116,6 +116,14 @@ export async function captureShadow(wsPath: string, runId: string, filePath: str
   }
 }
 
+const VALID_RUN_ID = /^[a-zA-Z0-9_-]+$/;
+
+function isInsideDir(child: string, parent: string): boolean {
+  const normChild = process.platform === "win32" ? child.toLowerCase() : child;
+  const normParent = process.platform === "win32" ? parent.toLowerCase() : parent;
+  return normChild === normParent || normChild.startsWith(normParent.endsWith(sep) ? normParent : normParent + sep);
+}
+
 /**
  * Enforce 20MB total shadow quota using FIFO cleanup of oldest run directories.
  */
@@ -123,21 +131,31 @@ export async function enforceShadowQuota(wsPath: string, maxBytes: number = MAX_
   const baseDir = shadowBaseDir(wsPath);
   if (!existsSync(baseDir)) return;
 
+  const lstatBase = await fs.lstat(baseDir).catch(() => null);
+  if (!lstatBase || lstatBase.isSymbolicLink()) return;
+
   const entries = await fs.readdir(baseDir, { withFileTypes: true }).catch(() => []);
   const runDirs: Array<{ name: string; fullPath: string; mtimeMs: number; size: number }> = [];
 
   let totalBytes = 0;
 
+  const realBase = existsSync(baseDir) ? realpathSync(baseDir) : baseDir;
+
   for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const fullPath = join(baseDir, entry.name);
-      try {
-        const dirInfo = await getDirSizeAndMtime(fullPath);
-        runDirs.push({ name: entry.name, fullPath, mtimeMs: dirInfo.mtimeMs, size: dirInfo.totalBytes });
-        totalBytes += dirInfo.totalBytes;
-      } catch {
-        // Skip unreadable dirs
-      }
+    if (entry.isSymbolicLink()) continue;
+    if (!entry.isDirectory()) continue;
+    if (!VALID_RUN_ID.test(entry.name)) continue;
+
+    const fullPath = join(baseDir, entry.name);
+    try {
+      const realEntry = realpathSync(fullPath);
+      if (!isInsideDir(realEntry, realBase)) continue;
+
+      const dirInfo = await getDirSizeAndMtime(fullPath);
+      runDirs.push({ name: entry.name, fullPath, mtimeMs: dirInfo.mtimeMs, size: dirInfo.totalBytes });
+      totalBytes += dirInfo.totalBytes;
+    } catch {
+      // Skip unreadable dirs
     }
   }
 
@@ -164,8 +182,9 @@ async function getDirSizeAndMtime(dirPath: string): Promise<{ totalBytes: number
   async function walk(cur: string) {
     const list = await fs.readdir(cur, { withFileTypes: true });
     for (const item of list) {
+      if (item.isSymbolicLink()) continue;
       const p = join(cur, item.name);
-      const s = await fs.stat(p);
+      const s = await fs.lstat(p);
       if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
       if (item.isDirectory()) {
         await walk(p);
