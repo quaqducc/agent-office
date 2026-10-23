@@ -70,7 +70,7 @@ export function myersDiff(path: string, oldText: string, newText: string): DiffR
   const trace: Array<Map<number, number>> = [];
 
   let foundD = -1;
-  const maxD = Math.min(MAX, 10000);
+  const maxD = Math.min(MAX, 2000);
 
   outer: for (let d = 0; d <= maxD; d++) {
     const vCopy = new Map<number, number>();

@@ -217,6 +217,11 @@ export async function listWorkspaceTree(
       } catch {}
     }
 
+    if (nodes.length >= 5000) {
+      (nodes as any).truncated = true;
+      break;
+    }
+
     nodes.push(node);
   }
 
@@ -295,6 +300,9 @@ export async function saveWorkspaceFile(
   }
 
   const currentSha256 = crypto.createHash("sha256").update(existingBuf).digest("hex");
+  if (!options.expectedSha256 && !options.force) {
+    throw new HttpError(400, "expectedSha256 is required unless force is true");
+  }
   if (options.expectedSha256 && currentSha256 !== options.expectedSha256 && !options.force) {
     throw new HttpError(409, "File has been modified on disk", {
       diskContent: existingBuf.toString("utf-8"),
@@ -313,6 +321,16 @@ export async function saveWorkspaceFile(
 
   try {
     await fs.writeFile(tmpPath, finalContent, "utf-8");
+    if (stat.mode) {
+      try { await fs.chmod(tmpPath, stat.mode); } catch {}
+    }
+    if (!options.force) {
+      const latestBuf = await fs.readFile(fullPath);
+      const latestSha = crypto.createHash("sha256").update(latestBuf).digest("hex");
+      if (latestSha !== currentSha256) {
+        throw new HttpError(409, "File was concurrently modified on disk");
+      }
+    }
     await fs.rename(tmpPath, fullPath);
   } catch (err) {
     try { await fs.rm(tmpPath, { force: true }); } catch {}

@@ -115,6 +115,9 @@ export function checkToolCall(tool: string, input: unknown, workspace: string, a
   if (SHELL_TOOLS.has(tool)) {
     const cmd = String(args.command ?? "");
     if (/\.company\b/i.test(cmd)) return block("this command", "touching orchestration data (.company/)");
+    if (/(https?:\/\/|\b)(localhost|127\.0\.0\.1|::1|\[::1\]|0\.0\.0\.0)(:\d+)?\b/i.test(cmd)) {
+      return block("this command", "accessing local loopback network or internal server");
+    }
     if (/(^|[;&|(]\s*)(env|printenv|set)\s*($|[|;&>])|\benv:|\$env:|Get-ChildItem\s+env:/i.test(cmd)) {
       return block("this command", "reading environment variables (they hold secrets)");
     }

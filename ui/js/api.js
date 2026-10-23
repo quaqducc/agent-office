@@ -1,9 +1,14 @@
 // Thin client for the orchestrator API (same origin).
 
 async function call(method, path, body) {
+  const headers = {};
+  if (body) headers["content-type"] = "application/json";
+  if (typeof window !== "undefined" && window.__COMPANY_TOKEN__) {
+    headers["x-company-token"] = window.__COMPANY_TOKEN__;
+  }
   const r = await fetch(path, {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
@@ -28,7 +33,10 @@ export const api = {
   config: id => call("GET", `/workspaces/${enc(id)}/config`),
   saveWorkspaceConfig: (id, config) => call("PUT", `/workspaces/${enc(id)}/config`, config),
   runs: id => call("GET", `/workspaces/${enc(id)}/runs`),
-  events: runId => call("GET", `/runs/${enc(runId)}/events`),
+  events: runId => {
+    const token = typeof window !== "undefined" && window.__COMPANY_TOKEN__ ? `?token=${enc(window.__COMPANY_TOKEN__)}` : "";
+    return call("GET", `/runs/${enc(runId)}/events${token}`);
+  },
   send: (id, text) => call("POST", `/workspaces/${enc(id)}/messages`, { text }),
   stop: runId => call("POST", `/runs/${enc(runId)}/stop`, {}),
   approvals: id => call("GET", `/workspaces/${enc(id)}/approvals`),

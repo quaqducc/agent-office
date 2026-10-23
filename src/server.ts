@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, extname, join, normalize, sep } from "node:path";
@@ -27,6 +28,7 @@ export interface ServerOptions {
   /** Override for tests: build the runner factory for a workspace. */
   createRunner?: (ws: Workspace, router: () => Router) => RunnerFactory;
   pickFolder?: () => Promise<PickFolderResult>;
+  apiToken?: string | boolean;
 }
 
 /** `sig`: signature of installed roles, workspace roles and rooms; rebuilt when changed and idle. */
@@ -63,7 +65,14 @@ function uiFile(urlPath: string): string | undefined {
   return existsSync(file) && statSync(file).isFile() ? file : undefined;
 }
 
-export async function startServer(o: ServerOptions = {}): Promise<{ url: string; close(): Promise<void> }> {
+export async function startServer(o: ServerOptions = {}): Promise<{ url: string; token?: string; close(): Promise<void> }> {
+  const apiToken = typeof o.apiToken === "string"
+    ? o.apiToken
+    : o.apiToken === false
+    ? undefined
+    : (o.apiToken === true || (!process.env.NODE_TEST_CONTEXT && !o.dataDir)
+        ? randomBytes(32).toString("hex")
+        : undefined);
   if (!o.dataDir) ensureHome();
   const store = new WorkspaceStore(o.dataDir ?? appHome());
   // Runs left "active" by a crash or kill can never finish: mark them interrupted.
@@ -170,8 +179,17 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     };
 
     if (m === "OPTIONS") {
-      res.writeHead(204, { ...cors, "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE", "access-control-allow-headers": "content-type" });
+      res.writeHead(204, { ...cors, "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE", "access-control-allow-headers": "content-type,x-company-token" });
       return res.end();
+    }
+    const isExempt = m === "OPTIONS"
+      || (m === "GET" && (url.pathname === "/" || url.pathname.startsWith("/ui/") || url.pathname.startsWith("/vendor/") || url.pathname === "/vendor/marked.js" || url.pathname === "/health"));
+
+    if (apiToken && !isExempt) {
+      const token = req.headers["x-company-token"] || url.searchParams.get("token");
+      if (token !== apiToken) {
+        throw new HttpError(401, "unauthorized: missing or invalid token");
+      }
     }
     if ((m === "POST" || m === "PUT" || m === "PATCH" || m === "DELETE") && !(req.headers["content-type"] ?? "").startsWith("application/json")) throw new HttpError(415, "content-type must be application/json");
     if (m === "GET" && (url.pathname === "/" || url.pathname.startsWith("/ui/") || url.pathname === "/vendor/marked.js")) {
@@ -179,6 +197,18 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         : url.pathname === "/vendor/marked.js" ? MARKED
         : uiFile(url.pathname.slice("/ui/".length));
       if (!file || !existsSync(file)) throw new HttpError(404, "not found");
+      if (url.pathname === "/") {
+        let html = readFileSync(file, "utf8");
+        if (apiToken) {
+          html = html.replace("</head>", `<script>window.__COMPANY_TOKEN__ = ${JSON.stringify(apiToken)};</script></head>`);
+        }
+        res.writeHead(200, {
+          "content-type": "text/html; charset=utf-8", "cache-control": "no-cache",
+          "x-frame-options": "DENY", "x-content-type-options": "nosniff",
+          "content-security-policy": "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'",
+        });
+        return res.end(html);
+      }
       res.writeHead(200, {
         "content-type": TYPES[extname(file)] ?? "application/octet-stream", "cache-control": "no-cache",
         // The UI shares an origin with the approval API: never allow framing (clickjacking on "approve").
@@ -363,11 +393,13 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         const fullDiskPath = pathResolve(ctx.ws.path, subpath);
         let newText = "";
         if (existsSync(fullDiskPath)) {
-          try {
-            newText = await fsPromises.readFile(fullDiskPath, "utf-8");
-          } catch {
-            newText = "";
-          }
+          const s = await fsPromises.stat(fullDiskPath);
+          if (s.isDirectory()) throw new HttpError(400, "Cannot diff directory");
+          if (s.size > 2 * 1024 * 1024) throw new HttpError(413, "File exceeds 2MB limit");
+          const buf = await fsPromises.readFile(fullDiskPath);
+          const sample = buf.subarray(0, Math.min(buf.length, 512));
+          if (sample.includes(0x00)) throw new HttpError(400, "Cannot diff binary file");
+          newText = buf.toString("utf-8");
         }
 
         const diffResult = myersDiff(subpath, oldText, newText);
@@ -428,6 +460,7 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   port = (server.address() as AddressInfo).port;
   return {
     url: `http://127.0.0.1:${port}`,
+    token: apiToken,
     close: () => new Promise<void>(r => {
       for (const c of sse) c.res.end();
       server.closeAllConnections();

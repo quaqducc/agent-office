@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { DEFAULT_LIMITS } from "./config.ts";
 import { roleIds } from "./library.ts";
 import type { Limits } from "./types.ts";
@@ -275,6 +275,20 @@ export class WorkspaceStore {
     }
   }
 
+  private safeWriteQueue(ws: Workspace, items: QueuedMessage[]): void {
+    const f = queueFile(ws);
+    if (existsSync(f)) {
+      const s = lstatSync(f);
+      if (s.isSymbolicLink()) {
+        throw new Error("queue.json is a symlink: refusing to write");
+      }
+    }
+    const dir = dirname(f);
+    const tmp = join(dir, `.queue.json.tmp.${Date.now()}.${randomUUID().slice(0, 6)}`);
+    writeFileSync(tmp, JSON.stringify(items, null, 2), "utf8");
+    renameSync(tmp, f);
+  }
+
   enqueue(ws: Workspace, text: string): { item: QueuedMessage; position: number } {
     if (typeof text !== "string" || text.length > 20000) {
       throw new Error("Message text too large (max 20000 characters)");
@@ -290,7 +304,7 @@ export class WorkspaceStore {
       hmac,
     };
     const updated = [...current, item];
-    writeFileSync(queueFile(ws), JSON.stringify(updated, null, 2));
+    this.safeWriteQueue(ws, updated);
     return { item, position: updated.length };
   }
 
@@ -302,7 +316,7 @@ export class WorkspaceStore {
       return undefined; // Do not auto-run untrusted items
     }
     const updated = current.slice(1);
-    writeFileSync(queueFile(ws), JSON.stringify(updated, null, 2));
+    this.safeWriteQueue(ws, updated);
     return item;
   }
 
@@ -310,7 +324,7 @@ export class WorkspaceStore {
     const current = this.getQueue(ws);
     const filtered = current.filter(q => q.id !== qid);
     if (filtered.length === current.length) return false;
-    writeFileSync(queueFile(ws), JSON.stringify(filtered, null, 2));
+    this.safeWriteQueue(ws, filtered);
     return true;
   }
 }
