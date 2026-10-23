@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 
@@ -116,3 +116,40 @@ test("read tools see through symlinks, globs and home-wide searches", () => {
   assert.equal(b("grep", { pattern: "TODO", path: "." }), false);
   assert.equal(b("read", { path: "README.md" }), false);
 });
+
+test("workspace under a junction/symlink allows writing normal files", async () => {
+  const base = mkdtempSync(join(tmpdir(), "guard-ws-junc-"));
+  const realTargetDir = join(base, "real-target");
+  mkdirSync(join(realTargetDir, "proj"), { recursive: true });
+
+  const junctionDir = join(base, "junction-dir");
+  symlinkSync(realTargetDir, junctionDir, process.platform === "win32" ? "junction" : "dir");
+
+  const ws = join(junctionDir, "proj");
+  try {
+    const { assertSafeWorkspacePath } = await import("../src/ide-fs.ts");
+
+    // 1. checkToolCall allows writing normal files in workspace
+    const r = checkToolCall("write", { path: "notes.md" }, ws);
+    assert.equal(r.block, false, "writing normal file in workspace under junction should be allowed");
+
+    // 2. assertSafeWorkspacePath allows normal file path
+    assert.doesNotThrow(() => {
+      assertSafeWorkspacePath(ws, "notes.md");
+    });
+
+    // 3. checkToolCall still blocks writing through a junction that targets outside
+    const outsideTarget = join(base, "outside-folder");
+    mkdirSync(outsideTarget, { recursive: true });
+    symlinkSync(outsideTarget, join(ws, "escape-link"), process.platform === "win32" ? "junction" : "dir");
+    const rEscape = checkToolCall("write", { path: "escape-link/leak.txt" }, ws);
+    assert.equal(rEscape.block, true, "junction pointing outside workspace must be blocked");
+
+    assert.throws(() => {
+      assertSafeWorkspacePath(ws, "escape-link/leak.txt");
+    }, /outside workspace/i);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+

@@ -149,7 +149,17 @@ export function assertSafeWorkspacePath(workspacePath: string, subpath: string):
 
   if (existsSync(checkPath)) {
     const realAncestor = realpathSync(checkPath);
-    const realRoot = realpathSync(root);
+    let checkRoot = root;
+    const rootTail: string[] = [];
+    while (!existsSync(checkRoot)) {
+      const parent = path.dirname(checkRoot);
+      if (parent === checkRoot) break;
+      rootTail.unshift(path.basename(checkRoot));
+      checkRoot = parent;
+    }
+    const realRoot = existsSync(checkRoot)
+      ? (rootTail.length > 0 ? path.join(realpathSync(checkRoot), ...rootTail) : realpathSync(checkRoot))
+      : root;
     const nRealAncestor = normCase(realAncestor);
     const nRealRoot = normCase(realRoot);
     if (nRealAncestor !== nRealRoot && !nRealAncestor.startsWith(nRealRoot.endsWith(sep) ? nRealRoot : nRealRoot + sep)) {

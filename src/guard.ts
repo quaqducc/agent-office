@@ -39,9 +39,11 @@ function within(api: PathApi, ws: string, p: string): { ok: boolean; why?: strin
   // Check real target if it exists
   const realP = real(api, ws, p);
   if (realP) {
-    const realFull = norm(api, ws, realP);
-    if (!inside(realFull, root)) return { ok: false, why: "resolving outside the workspace" };
-    if (inside(realFull, `${root}/.company`)) return { ok: false, why: "orchestration data (.company/)" };
+    const realRoot = real(api, ws, ".") ?? root;
+    const realRootNorm = norm(api, realRoot, ".");
+    const realFull = norm(api, realP, ".");
+    if (!inside(realFull, realRootNorm)) return { ok: false, why: "resolving outside the workspace" };
+    if (inside(realFull, `${realRootNorm}/.company`)) return { ok: false, why: "orchestration data (.company/)" };
     const whyReal = secret(api, ws, realP);
     if (whyReal) return { ok: false, why: whyReal };
   }
