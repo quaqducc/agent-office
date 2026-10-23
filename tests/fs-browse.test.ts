@@ -45,7 +45,7 @@ test("pickNativeFolder (win32) returns canceled when dialog dismissed", async ()
   assert.deepEqual(res, { canceled: true });
 });
 
-test("pickNativeFolder (win32) rejects unsafe UNC path", async () => {
+test("pickNativeFolder (win32) rejects unsafe UNC path", { skip: process.platform !== "win32" }, async () => {
   const mockExec = async () => ({ stdout: "\\\\evil-server\\share\r\n", stderr: "" });
   await assert.rejects(
     () => pickNativeFolder(mockExec, "win32"),
