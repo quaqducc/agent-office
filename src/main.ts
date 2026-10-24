@@ -4,7 +4,7 @@ import { accessSync, constants, existsSync, readFileSync, writeFileSync } from "
 import { join, resolve } from "node:path";
 
 export interface Args {
-  cmd: "start" | "doctor" | "chat" | "import" | "help" | "version";
+  cmd: "start" | "doctor" | "chat" | "import" | "shortcut" | "help" | "version";
   port?: number;
   home?: string;
   open: boolean;
@@ -12,7 +12,7 @@ export interface Args {
   error?: string;
 }
 
-const COMMANDS = new Set(["start", "doctor", "chat", "import", "help", "version"]);
+const COMMANDS = new Set(["start", "doctor", "chat", "import", "shortcut", "help", "version"]);
 
 export function parseArgs(argv: string[]): Args {
   const a: Args = { cmd: "start", open: true, rest: [] };
@@ -23,7 +23,7 @@ export function parseArgs(argv: string[]): Args {
     a.cmd = argv[0] as Args["cmd"];
     i = 1;
   }
-  if (a.cmd === "chat" || a.cmd === "import") { a.rest = argv.slice(i); return a; }
+  if (a.cmd === "chat" || a.cmd === "import" || a.cmd === "shortcut") { a.rest = argv.slice(i); return a; }
   for (; i < argv.length; i++) {
     const v = argv[i];
     if (v === "--port") {
@@ -43,6 +43,7 @@ const HELP = `Agent Company — an AI team in a pixel office.
 
 Usage:
   agent-company [start] [--port <n>] [--no-open] [--home <dir>]   start the app and open the browser
+  agent-company shortcut [--desktop] [--start-menu]             create desktop/start menu shortcut
   agent-company doctor                                          check Node, settings and providers
   agent-company chat <workspace-folder> [name]                  chat with the Manager in the terminal
   agent-company import --from-pi-runtime <dir> [--workspaces <file>]
@@ -131,6 +132,10 @@ export async function main(argv: string[]): Promise<number> {
     return args.error ? 1 : 0;
   }
   if (args.cmd === "version") { console.log((await import("./config.ts")).VERSION); return 0; }
+  if (args.cmd === "shortcut") {
+    const { runShortcutCommand } = await import("./launcher.ts");
+    return runShortcutCommand(args.rest);
+  }
   if (args.cmd === "doctor") return doctor();
   if (args.cmd === "import") return importOld(args.rest);
   if (args.cmd === "chat") {

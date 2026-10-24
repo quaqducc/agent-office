@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.4 — 2026-10-24
+
+- **Tiện ích mở app dễ dàng bằng Shortcut Desktop & Start Menu**:
+  - Thêm lệnh `agent-company shortcut [--desktop] [--start-menu]` tạo biểu tượng mở nhanh trên màn hình Desktop hoặc menu Start / Applications.
+  - Khởi chạy không hiện cửa sổ command prompt đen: chạy ẩn với PowerShell `-WindowStyle Hidden` và khóa cứng đường dẫn thực thi Node.js (`process.execPath`).
+  - Hỗ trợ đa nền tảng: tạo file `.lnk` trên Windows, `.desktop` trên Linux, và `.command` trên macOS.
+  - Tự động tạo Shortcut Desktop ngay sau khi hoàn tất cài đặt toàn cục qua `install.ps1`.
+
 ## 0.2.3 — 2026-10-24
 
 - **Kết nối Telegram Bot (Remote Chat & Checkpoint Approvals)**:

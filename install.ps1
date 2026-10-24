@@ -27,5 +27,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
+try {
+  & agent-company shortcut --desktop
+  Write-Host "Đã tạo lối tắt Agent Company trên Desktop. Bạn chỉ cần click đúp trên màn hình là mở app!"
+} catch {
+  Write-Host "Gợi ý: Bạn có thể tạo lối tắt Desktop bất cứ lúc nào bằng lệnh: agent-company shortcut"
+}
+
+Write-Host ""
 Write-Host "Done. Start it with:  agent-company"
 Write-Host "The office opens at http://127.0.0.1:4317 - enter your API endpoint and key there."
