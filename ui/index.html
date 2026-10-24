@@ -62,6 +62,7 @@
         <button id="act-explorer" class="act-btn on" type="button" title="Explorer (Ctrl+B)" aria-label="Explorer"><i data-icon="sidebar"></i></button>
         <button id="act-changes" class="act-btn" type="button" title="Thay đổi theo lần chạy" aria-label="Thay đổi"><i data-icon="git"></i></button>
         <button id="act-panel" class="act-btn on" type="button" title="Bảng điều khiển (Ctrl+J)" aria-label="Bảng điều khiển"><i data-icon="panel"></i></button>
+        <button id="act-feed" class="act-btn on" type="button" title="Hoạt động gần đây" aria-label="Hoạt động gần đây"><i data-icon="history"></i></button>
         <button id="act-chat" class="act-btn on" type="button" title="Trò chuyện Manager (Ctrl+Alt+B)" aria-label="Trò chuyện"><i data-icon="chat"></i></button>
       </div>
       <div class="spacer"></div>
@@ -111,8 +112,9 @@
             <div id="office" class="office" aria-label="Văn phòng — bấm vào nhân viên để xem chi tiết"></div>
             <div id="onboard" class="onboard" hidden></div>
             <div id="approvals" class="approvals" aria-live="assertive"></div>
+            <button id="feed-restore-btn" class="feed-restore-btn" type="button" title="Hiện hoạt động gần đây" hidden><i data-icon="history"></i><span>Hoạt động</span></button>
           </div>
-          <section class="feed-card" aria-labelledby="feed-title">
+          <section class="feed-card" id="feed-card" aria-labelledby="feed-title">
             <header class="card-head">
               <h2 id="feed-title">Hoạt động gần đây</h2>
               <ul class="legend" aria-label="Chú thích trạng thái">
@@ -121,6 +123,7 @@
                 <li><i class="dot lg-approval"></i>Chờ bạn duyệt</li>
                 <li><i class="dot lg-idle"></i>Rảnh</li>
               </ul>
+              <button id="feed-close" class="icon-btn small feed-close-btn" type="button" title="Thu gọn hoạt động gần đây" aria-label="Thu gọn"><i data-icon="x"></i></button>
             </header>
             <ol id="feed" class="feed"></ol>
           </section>

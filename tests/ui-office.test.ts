@@ -107,13 +107,20 @@ test("findWalkPath returns direct line for same room and door-corridor-door path
   const sameRoomPath = findWalkPath("planner", "critic", desks);
   assert.equal(sameRoomPath.length, 2, "Same room path has exactly 2 points: [start, end]");
   assert.equal(sameRoomPath[0].x, desks.find((d: any) => d.role === "planner").px);
-  assert.equal(sameRoomPath[1].x, desks.find((d: any) => d.role === "critic").px);
+  const criticDesk = desks.find((d: any) => d.role === "critic");
+  // Target position is in front of / beside the desk, NOT overlapping the seated role
+  assert.notDeepEqual(sameRoomPath.at(-1), { x: criticDesk.px, y: criticDesk.py });
+  assert.equal(sameRoomPath.at(-1)?.x, criticDesk.px - 32);
+  assert.equal(sameRoomPath.at(-1)?.y, criticDesk.py + 44);
 
   // Different rooms: developer in 'engineering' -> manager in 'manager'
   const diffRoomPath = findWalkPath("developer", "manager", desks);
   assert.ok(diffRoomPath.length >= 4, "Cross-room path traverses doors and corridors");
+  const managerDesk = desks.find((d: any) => d.role === "manager");
   assert.deepEqual(diffRoomPath[0], { x: desks.find((d: any) => d.role === "developer").px, y: desks.find((d: any) => d.role === "developer").py });
-  assert.deepEqual(diffRoomPath.at(-1), { x: desks.find((d: any) => d.role === "manager").px, y: desks.find((d: any) => d.role === "manager").py });
+  // Target position stands in front of manager desk, not directly on manager seat
+  assert.notDeepEqual(diffRoomPath.at(-1), { x: managerDesk.px, y: managerDesk.py });
+  assert.equal(diffRoomPath.at(-1)?.y, managerDesk.py + 44);
 
   // Manager to user at ENTRANCE
   const toUserPath = findWalkPath("manager", "user", desks);

@@ -372,6 +372,14 @@ export class CausalityDirector extends RoleWalkQueue {
       await animatePath(actor, forwardPath, timing.legDuration, ctrl);
       if (ctrl.aborted) return;
 
+      // Face toward target role / desk during dialogue
+      const lastPt = forwardPath.at(-1);
+      const targetDeskObj = desks?.find(d => d.role === target) || (target === "user" ? { px: ENTRANCE.x, py: ENTRANCE.y } : null);
+      if (lastPt && targetDeskObj) {
+        if (lastPt.x > targetDeskObj.px + 2) actor.classList.add("flip");
+        else if (lastPt.x < targetDeskObj.px - 2) actor.classList.remove("flip");
+      }
+
       // 2. Arrive at target and begin conversation
       this.arriveAtTarget(walker);
       const { text, cls } = getBubbleContent(fx);

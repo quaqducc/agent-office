@@ -25,8 +25,9 @@ const el = {
   stop: $("#stop-run"), conn: $("#conn"), replay: $("#replay-controls"), replayToggle: $("#replay-toggle"), replayBar: $("#replay-bar"),
   logRole: $("#log-role"), logType: $("#log-type"), logCount: $("#log-count"), flowCount: $("#flow-count"),
   form: $("#chat-form"), input: $("#chat-input"), drawer: $("#drawer"), drawerBody: $("#drawer-body"), ask: $("#ask"), toast: $("#toast"),
+  feedCard: $("#feed-card"), feedClose: $("#feed-close"), feedRestoreBtn: $("#feed-restore-btn"),
   openOffice: $("#open-office"),
-  actExplorer: $("#act-explorer"), actChanges: $("#act-changes"), actPanel: $("#act-panel"), actChat: $("#act-chat"),
+  actExplorer: $("#act-explorer"), actChanges: $("#act-changes"), actPanel: $("#act-panel"), actFeed: $("#act-feed"), actChat: $("#act-chat"),
   actStore: $("#act-store"), actSettings: $("#act-settings"), actTheme: $("#act-theme"),
   sidebarExplorer: $("#sidebar-explorer"), explorerTree: $("#explorer-tree"), explorerRefresh: $("#explorer-refresh"),
   explorerTitle: $("#explorer-title"), explorerCreateFile: $("#explorer-create-file"),
@@ -1012,6 +1013,27 @@ function toggleBottomPanel() {
   el.actPanel?.classList.toggle("on", !isCollapsed);
 }
 
+function toggleFeed(force) {
+  const card = el.feedCard || $("#feed-card") || $(".feed-card");
+  if (!card || !el.viewOffice) return;
+  const currentlyCollapsed = card.classList.contains("collapsed");
+  const collapse = typeof force === "boolean" ? force : !currentlyCollapsed;
+  card.classList.toggle("collapsed", collapse);
+  el.viewOffice.classList.toggle("feed-collapsed", collapse);
+  el.actFeed?.classList.toggle("on", !collapse);
+  if (el.feedRestoreBtn) el.feedRestoreBtn.hidden = !collapse;
+  try {
+    localStorage.setItem("feed-collapsed", collapse ? "1" : "0");
+  } catch (_) {}
+  if (el.office) fit(el.office);
+}
+
+try {
+  if (localStorage.getItem("feed-collapsed") === "1") {
+    toggleFeed(true);
+  }
+} catch (_) {}
+
 function toggleSideChat() {
   const isCollapsed = el.sideChat.classList.toggle("collapsed");
   el.actChat?.classList.toggle("on", !isCollapsed);
@@ -1021,6 +1043,10 @@ el.actExplorer?.addEventListener("click", showExplorerSidebar);
 el.actChanges?.addEventListener("click", showChangesSidebar);
 el.actPanel?.addEventListener("click", toggleBottomPanel);
 el.bottomPanelClose?.addEventListener("click", toggleBottomPanel);
+el.actFeed?.addEventListener("click", () => toggleFeed());
+el.feedClose?.addEventListener("click", () => toggleFeed(true));
+document.querySelector("#feed-card-close")?.addEventListener("click", () => toggleFeed(true));
+el.feedRestoreBtn?.addEventListener("click", () => toggleFeed(false));
 el.actChat?.addEventListener("click", toggleSideChat);
 el.sideChatClose?.addEventListener("click", toggleSideChat);
 el.explorerRefresh?.addEventListener("click", () => explorerTree.refresh());

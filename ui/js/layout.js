@@ -236,7 +236,28 @@ export function findWalkPath(fromRole, toRole, desks, rooms) {
   if (!deskA || !deskB) return [];
 
   const start = { x: deskA.px, y: deskA.py };
-  const end = { x: deskB.px, y: deskB.py };
+  let end = { x: deskB.px, y: deskB.py };
+
+  // When visiting a desk (not user at entrance), stand in front of or beside the desk
+  if (toRole !== "user") {
+    const offsetX = deskA.px < deskB.px ? -32 : (deskA.px > deskB.px ? 32 : 0);
+    let endY = deskB.py + 44;
+    if (rooms && rooms.length) {
+      const idx = typeof deskB.zone === "string" && deskB.zone.startsWith("room_") ? parseInt(deskB.zone.replace("room_", "")) - 1 : -1;
+      const boxes = getRoomBoxes(rooms.length);
+      if (boxes[idx]) {
+        const [, ry, , rh] = boxes[idx];
+        endY = Math.min(endY, ry + rh - 12);
+      }
+    } else {
+      const zone = ZONES.find(z => z.id === deskB.zone);
+      if (zone) {
+        const [, ry, , rh] = zone.box;
+        endY = Math.min(endY, ry + rh - 12);
+      }
+    }
+    end = { x: Math.round(deskB.px + offsetX), y: Math.round(endY) };
+  }
 
   if (deskA.zone && deskB.zone && deskA.zone === deskB.zone) {
     return [start, end];

@@ -560,6 +560,9 @@ h1, h2, h3 { margin: 0; }
   padding: 12px;
   overflow: hidden;
 }
+.view-office.feed-collapsed {
+  grid-template-rows: minmax(0, 1fr);
+}
 .view-editor {
   flex: 1;
   min-height: 0;
@@ -1504,6 +1507,35 @@ h1, h2, h3 { margin: 0; }
 /* ================= cards: feed & side ================= */
 .feed-card, .side { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); min-height: 0; }
 .feed-card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.feed-card.collapsed { display: none; }
+.feed-restore-btn {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+}
+.feed-restore-btn:hover {
+  background: var(--panel-hover, var(--panel-2));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.feed-restore-btn .ico {
+  width: 14px;
+  height: 14px;
+}
 .card-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
 .card-head h2 { font-size: 14.5px; font-weight: 700; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 0 auto; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
