@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-10-24
+
+- Sửa lỗi giao diện không nạp được (lỗi cú pháp app.js và prism.js); thêm kiểm tra cú pháp UI.
+
 ## 0.2.0 — 2026-10-23
 
 - **IDE đơn giản**:
