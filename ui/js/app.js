@@ -716,7 +716,6 @@ async function addWorkspace() {
   }, { once: true });
   d.showModal();
 }
-}
 
 el.form.addEventListener("submit", async ev => {
   ev.preventDefault();
