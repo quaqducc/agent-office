@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — 2026-10-24
+
+- Nhân vật di chuyển đứng trước bàn / bên cạnh role khác khi giao tiếp thay vì đè lên vị trí đang ngồi; tự động quay mặt về phía bàn đối thoại.
+- Thêm nút thu gọn và nút bật/tắt (activity bar + nút khôi phục) cho tab "Hoạt động gần đây", tự động mở rộng không gian văn phòng khi ẩn.
+
 ## 0.2.1 — 2026-10-24
 
 - Sửa lỗi giao diện không nạp được (lỗi cú pháp app.js và prism.js); thêm kiểm tra cú pháp UI.
