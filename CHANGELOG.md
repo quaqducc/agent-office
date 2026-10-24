@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3 — 2026-10-24
+
+- **Kết nối Telegram Bot (Remote Chat & Checkpoint Approvals)**:
+  - Cho phép trò chuyện hai chiều từ xa với Manager qua Telegram Bot không cần mở trình duyệt web.
+  - Nhận thông báo Checkpoint tức thời kèm Inline Keyboard `[Duyệt]` và `[Từ chối]` trực tiếp trên điện thoại; tự động cập nhật và gỡ nút tránh thao tác trùng lặp.
+  - Zero npm dependencies, sử dụng native `fetch` của Node.js.
+  - Bảo mật ghép đôi nghiêm ngặt: mã 6 số ngẫu nhiên thời hạn 5 phút, chỉ nhận tin nhắn riêng tư (private chat), chống brute-force (khóa 15 phút sau 5 lần sai) và so sánh an toàn thời gian (`crypto.timingSafeEqual`).
+  - Bảo vệ bot token an toàn trong cài đặt (`maskKey` và `mergeConfig`), tự động xử lý HTTP 429 và fallback plain text khi Telegram gặp lỗi phân tích Markdown 400.
+
 ## 0.2.2 — 2026-10-24
 
 - Nhân vật di chuyển đứng trước bàn / bên cạnh role khác khi giao tiếp thay vì đè lên vị trí đang ngồi; tự động quay mặt về phía bàn đối thoại.

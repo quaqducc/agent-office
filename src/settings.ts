@@ -19,11 +19,19 @@ export interface Provider {
 
 export interface ModelRef { provider: string; model: string }
 
+export interface TelegramConfig {
+  enabled: boolean;
+  botToken: string;
+  allowedChatId?: string;
+  defaultWorkspaceId?: string;
+}
+
 export interface AppConfig {
   providers: Provider[];
   defaultModel?: ModelRef;
   roleModels: Record<string, ModelRef>;
   search: { mode: "auto" | "endpoint" | "searxng" | "off"; searxngUrl?: string; model?: ModelRef };
+  telegram?: TelegramConfig;
   port?: number;
 }
 
@@ -77,7 +85,16 @@ export function maskKey(k: string): string {
 const isMasked = (k: string | undefined) => !k || k.includes("…");
 
 export function publicConfig(c: AppConfig): AppConfig {
-  return { ...c, providers: c.providers.map(p => ({ ...p, apiKey: maskKey(p.apiKey) })) };
+  return {
+    ...c,
+    providers: c.providers.map(p => ({ ...p, apiKey: maskKey(p.apiKey) })),
+    ...(c.telegram ? {
+      telegram: {
+        ...c.telegram,
+        botToken: maskKey(c.telegram.botToken),
+      },
+    } : {}),
+  };
 }
 
 /** pi uses a native Gemini base URL as is, so it must name the API version (…/v1beta). */
@@ -97,11 +114,20 @@ export function mergeConfig(current: AppConfig, incoming: AppConfig): AppConfig 
     const o = old.get(p.id);
     return o && o.api === p.api && origin(o.baseUrl) !== "" && origin(o.baseUrl) === origin(p.baseUrl) ? o.apiKey : "";
   };
+
+  let telegram = incoming.telegram;
+  if (telegram) {
+    const oldToken = current.telegram?.botToken ?? "";
+    const token = isMasked(telegram.botToken) ? oldToken : telegram.botToken;
+    telegram = { ...telegram, botToken: token };
+  }
+
   return {
     providers: (incoming.providers ?? []).map(p => ({ ...p, baseUrl: geminiVersioned(p), apiKey: isMasked(p.apiKey) ? keep(p) : p.apiKey })),
     ...(incoming.defaultModel ? { defaultModel: incoming.defaultModel } : {}),
     roleModels: incoming.roleModels ?? {},
     search: incoming.search ?? { mode: "auto" },
+    ...(telegram ? { telegram } : {}),
     ...(incoming.port ? { port: incoming.port } : {}),
   };
 }

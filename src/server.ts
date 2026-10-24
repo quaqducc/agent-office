@@ -9,6 +9,7 @@ import { PORT, VERSION } from "./config.ts";
 import { listModels, testProvider } from "./providers.ts";
 import { installRole, storeState, StoreError, uninstallRole } from "./store.ts";
 import { loadConfig, mergeConfig, publicConfig, saveConfig, validateConfig, writePiModels, type AppConfig, type Provider } from "./settings.ts";
+import { TelegramService } from "./telegram.ts";
 import { appHome, ensureHome } from "./home.ts";
 import { EventLog, readRun } from "./event-log.ts";
 import { loadRole, roleIds } from "./library.ts";
@@ -105,6 +106,32 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   const ctxs = new Map<string, Ctx>();
   const sse = new Set<{ res: ServerResponse; workspaceId?: string }>();
 
+  // Telegram remote service setup
+  let telegramService: TelegramService | null = null;
+  const appCfg = loadConfig();
+  const tgToken = process.env.AGENT_COMPANY_TELEGRAM_TOKEN || appCfg.telegram?.botToken;
+  const tgChatId = process.env.AGENT_COMPANY_TELEGRAM_CHAT_ID || appCfg.telegram?.allowedChatId;
+  const tgEnabled = process.env.AGENT_COMPANY_TELEGRAM_TOKEN ? true : !!appCfg.telegram?.enabled;
+
+  if (tgEnabled && tgToken) {
+    telegramService = new TelegramService({
+      botToken: tgToken,
+      allowedChatId: tgChatId,
+      getContext: (wsId) => {
+        const id = wsId || appCfg.telegram?.defaultWorkspaceId || store.list()[0]?.id;
+        return id ? ctxFor(id) : undefined;
+      },
+      onChatPaired: (chatId) => {
+        const current = loadConfig();
+        if (current.telegram) {
+          current.telegram.allowedChatId = chatId;
+          saveConfig(current);
+        }
+      },
+    });
+    telegramService.start().catch(() => {});
+  }
+
   function ctxFor(id: string): Ctx {
     const ws = store.get(id);
     if (!ws) throw new HttpError(404, `unknown workspace ${id}`);
@@ -137,6 +164,19 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         const s = { startedAt: e.ts, firstMessage: String(e.data.firstMessage ?? "") };
         started.set(e.runId, s);
         store.appendRun(ws, { runId: e.runId, ...s, status: "active", tokens: 0 });
+      }
+      if (telegramService) {
+        if (e.type === "approval_request" && e.data) {
+          telegramService.notifyCheckpoint({
+            checkpointId: String(e.data.checkpointId ?? ""),
+            title: String(e.data.title ?? "Yêu cầu duyệt"),
+            summary: String(e.data.summary ?? ""),
+            action: e.data.action ? String(e.data.action) : undefined,
+            workspaceId: ws.id,
+          }).catch(() => {});
+        } else if (e.type === "manager_reply" && e.data?.text) {
+          telegramService.notifyManagerReply(ws.id, String(e.data.text)).catch(() => {});
+        }
       }
       const frame = `data: ${JSON.stringify(e)}\n\n`;
       for (const c of sse) if (!c.workspaceId || c.workspaceId === e.workspaceId) c.res.write(frame);
@@ -245,8 +285,37 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         if (errors.length) throw new HttpError(400, errors.join("; "));
         saveConfig(next);
         writePiModels(next);
+
+        // Reconfigure or stop/start Telegram service if settings changed
+        if (next.telegram?.enabled && next.telegram?.botToken) {
+          if (telegramService) telegramService.stop().catch(() => {});
+          telegramService = new TelegramService({
+            botToken: next.telegram.botToken,
+            allowedChatId: next.telegram.allowedChatId,
+            getContext: (wsId) => {
+              const id = wsId || next.telegram?.defaultWorkspaceId || store.list()[0]?.id;
+              return id ? ctxFor(id) : undefined;
+            },
+            onChatPaired: (chatId) => {
+              const current = loadConfig();
+              if (current.telegram) {
+                current.telegram.allowedChatId = chatId;
+                saveConfig(current);
+              }
+            },
+          });
+          telegramService.start().catch(() => {});
+        } else if (telegramService) {
+          telegramService.stop().catch(() => {});
+          telegramService = null;
+        }
+
         return json(200, publicConfig(next));
       }
+    }
+    if (m === "POST" && url.pathname === "/settings/telegram/pair-code") {
+      if (!telegramService) throw new HttpError(400, "Telegram bot chưa được cấu hình hoặc chưa bật.");
+      return json(200, telegramService.getAuth().generatePairingCode());
     }
     if (m === "POST" && (url.pathname === "/settings/providers/test" || url.pathname === "/settings/providers/models")) {
       const b = await body(req);
@@ -483,6 +552,10 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
     url: `http://127.0.0.1:${port}`,
     token: apiToken,
     close: () => new Promise<void>(r => {
+      if (telegramService) {
+        telegramService.stop().catch(() => {});
+        telegramService = null;
+      }
       for (const c of sse) c.res.end();
       for (const c of ctxs.values()) c.router.dispose();
       ctxs.clear();
