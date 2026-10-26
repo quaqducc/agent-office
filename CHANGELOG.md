@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5 — 2026-10-24
+
+- **Tab Telegram trong giao diện Cài đặt (Settings UI)**:
+  - Thêm tab Telegram trực tiếp trong hộp thoại Cài đặt của web UI.
+  - Bổ sung nút `[Lấy mã ghép đôi]` gọi `POST /settings/telegram/pair-code` sinh mã 6 số to rõ ràng (`/pair <mã 6 số>`) có thời hạn 5 phút.
+  - Hiển thị trực quan trạng thái cấu hình bot (`Đang bật` / `Chưa bật`) và badge `✅ Đã ghép đôi (Chat ID: ...)` khi bot đã kết nối thành công.
+
 ## 0.2.4 — 2026-10-24
 
 - **Tiện ích mở app dễ dàng bằng Shortcut Desktop & Start Menu**:

@@ -221,6 +221,7 @@ export async function openSettings(ctx) {
       <button type="button" role="tab" data-tab="providers">Nhà cung cấp</button>
       <button type="button" role="tab" data-tab="models">Model</button>
       <button type="button" role="tab" data-tab="search">Tìm kiếm web</button>
+      <button type="button" role="tab" data-tab="telegram">Telegram</button>
     </nav>
     <div class="sheet-body"></div>
     <div class="sheet-foot"><small class="ver">Agent Company ${esc(ctx.version ?? "")}</small><p class="status-line bad" role="alert"></p>
@@ -250,6 +251,7 @@ export async function openSettings(ctx) {
     if (tab === "providers") body.innerHTML = providersHtml();
     if (tab === "models") body.innerHTML = modelsHtml();
     if (tab === "search") body.innerHTML = searchHtml();
+    if (tab === "telegram") body.innerHTML = telegramHtml();
   }
 
   function providersHtml() {
@@ -315,6 +317,32 @@ export async function openSettings(ctx) {
       <p class="note">${icon("sparkle")}<span>Endpoint của model mặc định${dp ? ` (${esc(dp.name)})` : ""}: <b>${esc(SEARCH_VI[dp?.search ?? "none"])}</b>. Đổi trong Nhà cung cấp → Sửa → Nâng cao.</span></p>`;
   }
 
+  function telegramHtml() {
+    const tg = cfg.telegram || { enabled: false, botToken: "" };
+    const hasToken = Boolean(tg.botToken);
+    const statusText = tg.enabled ? "Đang bật" : "Chưa bật";
+    return `<p class="hint">Kết nối Telegram Bot để nhận thông báo duyệt Checkpoint và trò chuyện từ xa với Manager trên điện thoại.</p>
+      <section class="set-sec">
+        <h3>Trạng thái kết nối</h3>
+        <p class="hint">Trạng thái cấu hình bot: <b>${esc(statusText)}</b></p>
+        <label class="field-toggle" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;">
+          <input type="checkbox" data-tg="enabled"${tg.enabled ? " checked" : ""}>
+          <b>Bật kết nối Telegram Bot</b>
+        </label>
+        <label class="field"><span>Bot Token (lấy từ @BotFather)</span>
+          <input data-tg="botToken" type="password" value="${esc(tg.botToken ?? "")}" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" autocomplete="off" spellcheck="false"></label>
+        <div style="margin-top:12px;">
+          ${tg.allowedChatId ? `<span class="tag good">✅ Đã ghép đôi (Chat ID: ${esc(tg.allowedChatId)})</span>` : `<span class="tag">Chưa ghép đôi chat cá nhân</span>`}
+        </div>
+      </section>
+      <section class="set-sec">
+        <h3>Ghép đôi tài khoản Telegram</h3>
+        <p class="hint">Để bảo mật, bot chỉ nhận lệnh từ tài khoản đã ghép đôi bằng mã 6 số.</p>
+        <button type="button" class="btn" data-tg="pair" data-s="get-pair-code"${!hasToken ? " disabled" : ""}>${icon("zap")}Lấy mã ghép đôi</button>
+        <div id="tg-pair-box" style="margin-top:12px;"></div>
+      </section>`;
+  }
+
   // edits update the working copy; nothing is stored until "Lưu"
   function readPick(row) {
     const pid = row.querySelector('[data-k="provider"]').value;
@@ -337,6 +365,14 @@ export async function openSettings(ctx) {
     }
     if (ev.target.name === "mode") cfg.search = { ...cfg.search, mode: ev.target.value };
     if (ev.target.name === "searxngUrl") cfg.search = { ...cfg.search, searxngUrl: ev.target.value.trim() || undefined };
+    if (ev.target.dataset.tg === "enabled") {
+      cfg.telegram = { ...cfg.telegram, enabled: ev.target.checked };
+    }
+    if (ev.target.dataset.tg === "botToken") {
+      cfg.telegram = { ...cfg.telegram, botToken: ev.target.value.trim() };
+      const pairBtn = body.querySelector('[data-tg="pair"]');
+      if (pairBtn) pairBtn.disabled = !cfg.telegram.botToken;
+    }
   });
   body.addEventListener("input", ev => { if (ev.target.dataset.k === "model") ev.target.dispatchEvent(new Event("change", { bubbles: true })); });
   body.addEventListener("focusin", ev => {
@@ -346,6 +382,32 @@ export async function openSettings(ctx) {
   });
 
   body.addEventListener("click", async ev => {
+    const tgPairBtn = ev.target.closest('[data-tg="pair"], [data-s="get-pair-code"]');
+    if (tgPairBtn) {
+      const box = body.querySelector("#tg-pair-box");
+      if (!box) return;
+      tgPairBtn.disabled = true;
+      box.innerHTML = `<p class="status-line busy">Đang lấy mã kết nối từ server...</p>`;
+      try {
+        const res = await (api.telegramPairCode ? api.telegramPairCode() : api.getTelegramPairCode());
+        const formattedCode = res.code.replace(/(\d{3})(\d{3})/, "$1 $2");
+        box.innerHTML = `
+          <div style="background:var(--card-bg, #1e1e24);padding:16px;border-radius:8px;border:1px solid var(--line-2, #333);text-align:center;">
+            <p style="margin:0 0 8px;font-size:13px;color:var(--muted);">Mở Telegram, chat riêng với Bot của bạn và gửi lệnh sau:</p>
+            <div class="pair-code" style="font-size:28px;font-weight:700;letter-spacing:4px;color:var(--accent,#4ec9b0);font-family:monospace;margin:12px 0;">
+              /pair ${esc(formattedCode)}
+            </div>
+            <p style="margin:8px 0 0;font-size:12px;color:var(--muted);">Mã có hiệu lực trong 5 phút. Sau khi ghép đôi, bạn có thể chat và duyệt tác vụ trực tiếp trên điện thoại.</p>
+          </div>
+        `;
+      } catch (err) {
+        box.innerHTML = `<p class="status-line bad">Không lấy được mã: ${esc(err.message)}</p>`;
+      } finally {
+        tgPairBtn.disabled = false;
+      }
+      return;
+    }
+
     const t = ev.target.closest("[data-edit], [data-del], [data-ed], [data-test]");
     if (!t) return;
     if (t.dataset.edit !== undefined) { editing = Number(t.dataset.edit); return draw(); }

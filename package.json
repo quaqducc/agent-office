@@ -1,6 +1,6 @@
 {
   "name": "@quaqduc/agent-company",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "An AI team (Manager, Researcher, Developer, Critic, and more on demand) working in a 2D pixel office. Bring any OpenAI-, Anthropic- or Gemini-compatible API.",
   "keywords": ["ai", "agents", "multi-agent", "llm", "pixel-art", "pi"],
   "license": "MIT",
