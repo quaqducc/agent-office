@@ -9,6 +9,7 @@ import {
   resolveShortcutPaths,
   generateShortcutScript,
   createShortcut,
+  windowsShellFolders,
 } from "../src/launcher.ts";
 
 test("Launcher: parseArgs recognizes shortcut command and flags", () => {
@@ -71,6 +72,13 @@ test("Launcher: resolveShortcutPaths returns platform-specific directories", () 
   });
   assert.equal(xdgPaths.desktop, "/home/testuser/Mesa");
   assert.equal(xdgPaths.startMenu, "/home/testuser/.local/custom-share/applications");
+});
+
+test("Launcher: windowsShellFolders returns the real (possibly OneDrive / non-ASCII) folders", { skip: process.platform !== "win32" }, () => {
+  const folders = windowsShellFolders();
+  assert.ok(folders, "PowerShell lookup must succeed");
+  assert.ok(existsSync(folders.desktop), `Desktop must exist: ${folders.desktop}`);
+  assert.ok(existsSync(folders.startMenu), `Start Menu must exist: ${folders.startMenu}`);
 });
 
 test("Launcher: generateShortcutScript locks process.execPath and cliPath", () => {

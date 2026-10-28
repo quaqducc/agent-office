@@ -72,6 +72,15 @@ export function resolveShortcutPaths(
   };
 }
 
+/** Real Desktop / Start Menu folders on Windows: OneDrive or a localized profile can move them away from %USERPROFILE%\Desktop. */
+export function windowsShellFolders(): ShortcutPaths | undefined {
+  const ps = spawnSync("powershell.exe", ["-NoProfile", "-Command",
+    "[Console]::OutputEncoding = [Text.Encoding]::UTF8; [Environment]::GetFolderPath('Desktop'); [Environment]::GetFolderPath('Programs')"],
+    { windowsHide: true, encoding: "utf-8" });
+  const [desktop, startMenu] = (ps.stdout ?? "").split(/\r?\n/).map(s => s.trim());
+  return ps.status === 0 && desktop && startMenu ? { desktop, startMenu } : undefined;
+}
+
 export function getDefaultCliPath(): string {
   // Points to bin/agent-company.js relative to this file
   return resolve(dirname(fileURLToPath(import.meta.url)), "../bin/agent-company.js");
@@ -134,7 +143,7 @@ export function generateShortcutScript(
 export async function createShortcut(opts: ShortcutOptions): Promise<ShortcutResult> {
   const result: ShortcutResult = { created: [], errors: [] };
   const platform = process.platform;
-  const paths = resolveShortcutPaths(platform);
+  const paths = (platform === "win32" && windowsShellFolders()) || resolveShortcutPaths(platform);
 
   const targets: { dir: string; filename: string }[] = [];
   const ext = platform === "win32" ? ".lnk" : platform === "darwin" ? ".command" : ".desktop";
