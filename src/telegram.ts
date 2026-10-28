@@ -104,7 +104,15 @@ export interface TelegramServiceOptions {
   pollIntervalMs?: number;
   getContext: (workspaceId?: string) => { ws: Workspace; router: Router; log: EventLog } | undefined;
   onChatPaired?: (chatId: string) => void;
+  /** Workspaces offered by /workspace. */
+  listWorkspaces?: () => Workspace[];
+  /** Workspace that Telegram messages go to until the user picks another one. */
+  defaultWorkspaceId?: string;
+  onWorkspaceSelected?: (workspaceId: string) => void;
 }
+
+// Telegram caps callback_data at 64 bytes ("approve:cp-xxxxxxxx:" leaves 44); workspace ids end in a unique hash, so their tail identifies them.
+const wsKey = (id: string) => id.slice(-40);
 
 export class TelegramService {
   private botToken: string;
@@ -113,6 +121,9 @@ export class TelegramService {
   private pollIntervalMs: number;
   private getContext: (workspaceId?: string) => { ws: Workspace; router: Router; log: EventLog } | undefined;
   private onChatPaired?: (chatId: string) => void;
+  private listWorkspaces: () => Workspace[];
+  private selectedWorkspaceId?: string;
+  private onWorkspaceSelected?: (workspaceId: string) => void;
   private auth: TelegramAuth;
   private running = false;
   private abortController: AbortController | null = null;
@@ -125,7 +136,31 @@ export class TelegramService {
     this.pollIntervalMs = options.pollIntervalMs ?? 1000;
     this.getContext = options.getContext;
     this.onChatPaired = options.onChatPaired;
+    this.listWorkspaces = options.listWorkspaces ?? (() => []);
+    this.selectedWorkspaceId = options.defaultWorkspaceId;
+    this.onWorkspaceSelected = options.onWorkspaceSelected;
     this.auth = new TelegramAuth(options.allowedChatId);
+  }
+
+  /** The workspace Telegram messages go to: the picked one while it exists, else the first. */
+  private currentWorkspaceId(): string | undefined {
+    const all = this.listWorkspaces();
+    return all.find(w => w.id === this.selectedWorkspaceId)?.id ?? all[0]?.id ?? this.selectedWorkspaceId;
+  }
+
+  /** True when the user picked a workspace that has since been deleted. */
+  private selectionLost(): boolean {
+    const all = this.listWorkspaces();
+    return !!this.selectedWorkspaceId && all.length > 0 && !all.some(w => w.id === this.selectedWorkspaceId);
+  }
+
+  private workspaceName(id?: string): string {
+    return (id && this.listWorkspaces().find(w => w.id === id)?.name) || id || "?";
+  }
+
+  private workspaceKeyboard() {
+    const current = this.currentWorkspaceId();
+    return { inline_keyboard: this.listWorkspaces().map(w => [{ text: `${w.id === current ? "✅ " : ""}${w.name}`, callback_data: `ws:${wsKey(w.id)}` }]) };
   }
 
   getAuth(): TelegramAuth {
@@ -213,25 +248,29 @@ export class TelegramService {
   async notifyManagerReply(workspaceId: string, text: string): Promise<void> {
     const chatId = this.allowedChatId;
     if (!chatId) return;
-    const formatted = `💬 *Manager*: ${text}`;
+    const label = `[${this.workspaceName(workspaceId)}]`;
+    const formatted = `💬 *${label} Manager*: ${text}`;
     await this.sendMessage(chatId, formatted, { parse_mode: "Markdown" }).catch(() => {
-      return this.sendMessage(chatId, `Manager: ${text}`);
+      return this.sendMessage(chatId, `${label} Manager: ${text}`);
     });
   }
 
   async notifyCheckpoint(item: { checkpointId: string; title: string; summary: string; action?: string; workspaceId?: string }): Promise<void> {
     const chatId = this.allowedChatId;
     if (!chatId) return;
+    // The button carries its workspace, so approvals still land correctly after the service is rebuilt
+    const ws = item.workspaceId ? `:${wsKey(item.workspaceId)}` : "";
+    const wsName = this.workspaceName(item.workspaceId);
 
-    let body = `🚨 *YÊU CẦU DUYỆT CHECKPOINT*\n\n📌 *Tiêu đề:* ${item.title}\n📝 *Mô tả:* ${item.summary}`;
+    let body = `🚨 *YÊU CẦU DUYỆT CHECKPOINT*\n\n🗂 *Workspace:* ${wsName}\n📌 *Tiêu đề:* ${item.title}\n📝 *Mô tả:* ${item.summary}`;
     if (item.action) {
       body += `\n⚙️ *Hành động:* \`${item.action}\``;
     }
 
     const inline_keyboard = [
       [
-        { text: "✅ Duyệt (Approve)", callback_data: `approve:${item.checkpointId}` },
-        { text: "❌ Từ chối (Reject)", callback_data: `reject:${item.checkpointId}` },
+        { text: "✅ Duyệt (Approve)", callback_data: `approve:${item.checkpointId}${ws}` },
+        { text: "❌ Từ chối (Reject)", callback_data: `reject:${item.checkpointId}${ws}` },
       ],
     ];
 
@@ -240,7 +279,7 @@ export class TelegramService {
       reply_markup: { inline_keyboard },
     }).catch(() => {
       // Plain text fallback
-      const plain = `YÊU CẦU DUYỆT CHECKPOINT\nTiêu đề: ${item.title}\nMô tả: ${item.summary}${item.action ? `\nHành động: ${item.action}` : ""}`;
+      const plain = `YÊU CẦU DUYỆT CHECKPOINT\nWorkspace: ${wsName}\nTiêu đề: ${item.title}\nMô tả: ${item.summary}${item.action ? `\nHành động: ${item.action}` : ""}`;
       return this.sendMessage(chatId, plain, { reply_markup: { inline_keyboard } });
     });
   }
@@ -263,7 +302,12 @@ export class TelegramService {
             if (update.update_id > this.lastUpdateId) {
               this.lastUpdateId = update.update_id;
             }
-            await this.handleUpdate(update);
+            // One bad update must neither kill the loop silently nor leave the user without an answer
+            await this.handleUpdate(update).catch(err => {
+              console.error(`telegram: update ${update.update_id} failed:`, err);
+              const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
+              if (chatId) this.sendMessage(chatId, `⚠️ Lỗi nội bộ khi xử lý yêu cầu: ${err?.message ?? err}`).catch(() => {});
+            });
           }
         }
       } catch (err: any) {
@@ -324,54 +368,90 @@ export class TelegramService {
       const help = "🤖 *Agent Company Remote Bot*\n\n" +
         "• Gõ tin nhắn bất kỳ để giao việc cho Manager\n" +
         "• Khi có Checkpoint cần duyệt, bot sẽ gửi thông báo kèm nút bấm\n" +
+        "• Gõ `/workspace` để chọn workspace nhận tin nhắn\n" +
         "• Gõ `/status` để xem trạng thái lượt chạy hiện tại\n";
       await this.sendMessage(chatId, help, { parse_mode: "Markdown" });
       return;
     }
 
+    if (text === "/workspace" || text.startsWith("/workspace@")) {
+      const keyboard = this.workspaceKeyboard();
+      if (!keyboard.inline_keyboard.length) {
+        await this.sendMessage(chatId, "Chưa có workspace nào. Hãy thêm workspace trên ứng dụng web.");
+        return;
+      }
+      await this.sendMessage(chatId, `🗂 Đang chọn: *${this.workspaceName(this.currentWorkspaceId())}*\nChọn workspace nhận tin nhắn:`, { parse_mode: "Markdown", reply_markup: keyboard });
+      return;
+    }
+
+    if (this.selectionLost()) {
+      await this.sendMessage(chatId, "⚠️ Workspace bạn đã chọn không còn tồn tại, tin nhắn chưa được gửi. Gõ /workspace để chọn lại.");
+      return;
+    }
+    const wsId = this.currentWorkspaceId();
+    const label = `[${this.workspaceName(wsId)}]`;
+
     if (text === "/status") {
-      const ctx = this.getContext();
+      const ctx = this.getContext(wsId);
       if (!ctx) {
         await this.sendMessage(chatId, "Không tìm thấy workspace mặc định.");
         return;
       }
       const active = ctx.router.activeRunId();
-      const statusText = active ? `⏳ Đang có lần chạy đang hoạt động: \`${active}\`` : "💤 Manager hiện đang rảnh rỗi (idle).";
+      const statusText = active ? `${label} ⏳ Đang có lần chạy đang hoạt động: \`${active}\`` : `${label} 💤 Manager hiện đang rảnh rỗi (idle).`;
       await this.sendMessage(chatId, statusText, { parse_mode: "Markdown" });
       return;
     }
 
     // Default: Dispatch as User Message to Router
-    const ctx = this.getContext();
+    const ctx = this.getContext(wsId);
     if (!ctx) {
       await this.sendMessage(chatId, "⚠️ Không tìm thấy workspace hoạt động để chuyển tin nhắn.");
       return;
     }
 
     ctx.router.sendUserMessage(text);
-    await this.sendMessage(chatId, "📨 Đã chuyển tin nhắn đến Manager.");
+    await this.sendMessage(chatId, `📨 Đã chuyển tin nhắn đến Manager ${label}.`);
+  }
+
+  private async selectWorkspace(cb: any, key: string): Promise<void> {
+    const ws = this.listWorkspaces().find(w => wsKey(w.id) === key);
+    if (!ws) {
+      await this.sendMessage(cb.message.chat.id, "⚠️ Workspace này không còn tồn tại. Gõ /workspace để xem lại danh sách.");
+      return;
+    }
+    this.onWorkspaceSelected?.(ws.id); // persist first: if saving throws, the selection stays as the user last saw it
+    this.selectedWorkspaceId = ws.id;
+    await this.editMessageText(cb.message.chat.id, cb.message.message_id, `🗂 Đang chọn: ${ws.name}`, { reply_markup: this.workspaceKeyboard() }).catch(() => {});
+    await this.sendMessage(cb.message.chat.id, `✅ Đã chuyển sang workspace *${ws.name}*. Tin nhắn tiếp theo sẽ gửi tới đây.`, { parse_mode: "Markdown" });
   }
 
   private async handleCallbackQuery(cb: any): Promise<void> {
     const cbId = cb.id;
     const data = String(cb.data || "");
-    const [action, checkpointId] = data.split(":");
+    const sep = data.indexOf(":");
+    const action = data.slice(0, sep);
+    const arg = data.slice(sep + 1);
+    const chatId = cb.message?.chat?.id;
 
     await this.answerCallbackQuery(cbId, "Đang xử lý...").catch(() => {});
 
-    if (!checkpointId || !["approve", "reject"].includes(action)) return;
+    if (sep < 0 || !arg || !chatId || (!this.auth.isPaired(chatId) && String(chatId) !== this.allowedChatId)) return;
+    if (action === "ws") return this.selectWorkspace(cb, arg);
+    if (!["approve", "reject"].includes(action)) return;
 
-    const ctx = this.getContext();
-    if (!ctx) return;
+    const [checkpointId, key] = arg.split(":");
+    const origin = key ? this.listWorkspaces().find(w => wsKey(w.id) === key)?.id : undefined;
+    const ctx = this.getContext(origin ?? this.currentWorkspaceId());
 
     const decision = action === "approve" ? "approve" : "reject";
-    const ok = ctx.router.replyApproval(checkpointId, decision, "Từ Telegram Bot");
+    const ok = !!ctx && ctx.router.replyApproval(checkpointId, decision, "Từ Telegram Bot");
 
     const msg = cb.message;
     if (msg) {
       const originalText = msg.text || "";
-      const statusIcon = decision === "approve" ? "✅ ĐÃ DUYỆT" : "❌ ĐÃ TỪ CHỐI";
-      const updatedText = `${originalText}\n\n${statusIcon} (qua Telegram)`;
+      const statusIcon = !ok ? "⚠️ Checkpoint này không còn chờ duyệt (đã được xử lý hoặc đã hết hạn)." : decision === "approve" ? "✅ ĐÃ DUYỆT" : "❌ ĐÃ TỪ CHỐI";
+      const updatedText = ok ? `${originalText}\n\n${statusIcon} (qua Telegram)` : `${originalText}\n\n${statusIcon}`;
 
       await this.editMessageText(msg.chat.id, msg.message_id, updatedText, {
         reply_markup: { inline_keyboard: [] },

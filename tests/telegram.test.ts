@@ -245,8 +245,8 @@ describe("Telegram Mock Server & Service End-to-End", () => {
     const cpMsg = sentMessages.at(-1);
     assert.ok(cpMsg.reply_markup?.inline_keyboard, "Checkpoint notification must include inline_keyboard");
     const buttons = cpMsg.reply_markup.inline_keyboard[0];
-    assert.ok(buttons.some((b: any) => b.callback_data === "approve:cp-1"));
-    assert.ok(buttons.some((b: any) => b.callback_data === "reject:cp-1"));
+    assert.ok(buttons.some((b: any) => b.callback_data === "approve:cp-1:ws-1"));
+    assert.ok(buttons.some((b: any) => b.callback_data === "reject:cp-1:ws-1"));
 
     // User clicks [Duyệt]
     updatesQueue.push({
@@ -270,6 +270,112 @@ describe("Telegram Mock Server & Service End-to-End", () => {
     assert.ok(editedMessages.length > 0, "Must edit message to remove buttons");
     const edit = editedMessages.at(-1);
     assert.deepEqual(edit.reply_markup?.inline_keyboard, [], "Inline keyboard buttons must be cleared");
+
+    await service.stop();
+  });
+
+  test("Workspaces: /workspace picker switches target, replies are labelled, approvals go to the origin workspace", async () => {
+    updatesQueue = [];
+    sentMessages = [];
+    editedMessages = [];
+
+    const received: Record<string, string[]> = { "alpha-111111": [], "beta-222222": [] };
+    const approvals: Record<string, string[]> = { "alpha-111111": [], "beta-222222": [] };
+    const workspaces = [{ id: "alpha-111111", name: "Alpha", path: "/a" }, { id: "beta-222222", name: "Beta", path: "/b" }];
+    const routerFor = (id: string) => ({
+      sendUserMessage: (text: string) => { received[id].push(text); return { runId: "r", questionId: "q" }; },
+      activeRunId: () => undefined,
+      replyApproval: (cp: string) => { approvals[id].push(cp); return cp !== "cp-gone"; },
+    });
+    const selected: string[] = [];
+
+    const service = new TelegramService({
+      botToken: "MOCK_TOKEN",
+      allowedChatId: "12345",
+      apiBaseUrl: mockUrl,
+      pollIntervalMs: 50,
+      listWorkspaces: () => workspaces,
+      defaultWorkspaceId: "alpha-111111",
+      onWorkspaceSelected: id => selected.push(id),
+      getContext: id => {
+        const ws = workspaces.find(w => w.id === id);
+        return ws ? { ws, router: routerFor(ws.id) as any, log: null as any } : undefined;
+      },
+    });
+    await service.start();
+    const chat = { id: 12345, type: "private" };
+    let upd = 300;
+    const say = (text: string) => updatesQueue.push({ update_id: ++upd, message: { message_id: upd, chat, text } });
+    const click = (data: string, message_id = 1) => updatesQueue.push({ update_id: ++upd, callback_query: { id: `cb-${upd}`, from: { id: 12345 }, message: { message_id, chat, text: "x" }, data } });
+    const wait = () => new Promise(r => setTimeout(r, 200));
+
+    // 1. /workspace lists every workspace, the current one is ticked
+    say("/workspace");
+    await wait();
+    const picker = sentMessages.at(-1);
+    const buttons = picker.reply_markup.inline_keyboard.flat();
+    assert.equal(buttons.length, 2);
+    assert.ok(buttons[0].text.includes("✅") && buttons[0].text.includes("Alpha"));
+    assert.ok(!buttons[1].text.includes("✅") && buttons[1].text.includes("Beta"));
+    assert.ok(buttons.every((b: any) => Buffer.byteLength(b.callback_data) <= 64), "callback_data must fit Telegram's 64-byte limit");
+
+    // 2. Picking Beta re-ticks the picker, persists, and routes later messages to Beta
+    click(buttons[1].callback_data, picker.message_id);
+    await wait();
+    assert.deepEqual(selected, ["beta-222222"]);
+    const ticked = editedMessages.at(-1).reply_markup.inline_keyboard.flat();
+    assert.ok(ticked[1].text.includes("✅") && !ticked[0].text.includes("✅"));
+    assert.ok(sentMessages.at(-1).text.includes("Beta"));
+    say("làm việc B");
+    await wait();
+    assert.deepEqual(received["beta-222222"], ["làm việc B"]);
+    assert.deepEqual(received["alpha-111111"], []);
+    assert.ok(sentMessages.at(-1).text.includes("[Beta]"), "send confirmation names the workspace");
+
+    // 3. Outgoing messages carry the workspace name
+    await service.notifyManagerReply("alpha-111111", "xong A");
+    assert.ok(sentMessages.at(-1).text.includes("[Alpha]"));
+    await service.notifyCheckpoint({ checkpointId: "cp-a1", title: "T", summary: "S", workspaceId: "alpha-111111" });
+    assert.ok(sentMessages.at(-1).text.includes("Alpha"));
+
+    // 4. Approving goes to the workspace that raised the checkpoint, not the selected one —
+    //    the button itself names the workspace, so it survives the service being rebuilt on a settings save
+    const approveBtn = sentMessages.at(-1).reply_markup.inline_keyboard[0].find((b: any) => b.callback_data.startsWith("approve:"));
+    assert.ok(Buffer.byteLength(approveBtn.callback_data) <= 64);
+    assert.ok(approveBtn.callback_data.includes("alpha-111111"));
+    click(approveBtn.callback_data);
+    await wait();
+    assert.deepEqual(approvals["alpha-111111"], ["cp-a1"]);
+    assert.deepEqual(approvals["beta-222222"], []);
+
+    // 5. A checkpoint that is no longer pending is reported, not silently dropped
+    await service.notifyCheckpoint({ checkpointId: "cp-gone", title: "T", summary: "S", workspaceId: "beta-222222" });
+    click("approve:cp-gone:beta-222222");
+    await wait();
+    assert.match(editedMessages.at(-1).text, /không còn chờ duyệt/);
+
+    // 6. /status names the selected workspace
+    say("/status");
+    await wait();
+    assert.ok(sentMessages.at(-1).text.includes("Beta"));
+
+    // 7. If the selected workspace is deleted, messages are held back instead of going to another workspace
+    workspaces.splice(1, 1);
+    say("việc lạc");
+    await wait();
+    assert.deepEqual(received["alpha-111111"], []);
+    assert.match(sentMessages.at(-1).text, /\/workspace/);
+
+    // 8. A handler that throws is reported in the chat, and the next update is still processed
+    const broken = workspaces[0];
+    Object.defineProperty(broken, "name", { get() { throw new Error("boom"); }, configurable: true });
+    say("/workspace");
+    await wait();
+    assert.match(sentMessages.at(-1).text, /Lỗi/);
+    Object.defineProperty(broken, "name", { value: "Alpha", configurable: true });
+    say("/help");
+    await wait();
+    assert.match(sentMessages.at(-1).text, /\/workspace/);
 
     await service.stop();
   });

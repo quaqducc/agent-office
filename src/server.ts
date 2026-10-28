@@ -113,24 +113,31 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
   const tgChatId = process.env.AGENT_COMPANY_TELEGRAM_CHAT_ID || appCfg.telegram?.allowedChatId;
   const tgEnabled = process.env.AGENT_COMPANY_TELEGRAM_TOKEN ? true : !!appCfg.telegram?.enabled;
 
-  if (tgEnabled && tgToken) {
-    telegramService = new TelegramService({
-      botToken: tgToken,
-      allowedChatId: tgChatId,
+  function createTelegram(botToken: string, allowedChatId?: string): TelegramService {
+    const saveTelegram = (patch: Partial<NonNullable<AppConfig["telegram"]>>) => {
+      const current = loadConfig();
+      if (current.telegram) {
+        Object.assign(current.telegram, patch);
+        saveConfig(current);
+      }
+    };
+    const service = new TelegramService({
+      botToken,
+      allowedChatId,
+      listWorkspaces: () => store.list(),
+      defaultWorkspaceId: loadConfig().telegram?.defaultWorkspaceId,
       getContext: (wsId) => {
-        const id = wsId || appCfg.telegram?.defaultWorkspaceId || store.list()[0]?.id;
-        return id ? ctxFor(id) : undefined;
+        const id = wsId || store.list()[0]?.id;
+        return id && store.get(id) ? ctxFor(id) : undefined;
       },
-      onChatPaired: (chatId) => {
-        const current = loadConfig();
-        if (current.telegram) {
-          current.telegram.allowedChatId = chatId;
-          saveConfig(current);
-        }
-      },
+      onChatPaired: (chatId) => saveTelegram({ allowedChatId: chatId }),
+      onWorkspaceSelected: (id) => saveTelegram({ defaultWorkspaceId: id }),
     });
-    telegramService.start().catch(() => {});
+    service.start().catch(() => {});
+    return service;
   }
+
+  if (tgEnabled && tgToken) telegramService = createTelegram(tgToken, tgChatId);
 
   function ctxFor(id: string): Ctx {
     const ws = store.get(id);
@@ -289,22 +296,7 @@ export async function startServer(o: ServerOptions = {}): Promise<{ url: string;
         // Reconfigure or stop/start Telegram service if settings changed
         if (next.telegram?.enabled && next.telegram?.botToken) {
           if (telegramService) telegramService.stop().catch(() => {});
-          telegramService = new TelegramService({
-            botToken: next.telegram.botToken,
-            allowedChatId: next.telegram.allowedChatId,
-            getContext: (wsId) => {
-              const id = wsId || next.telegram?.defaultWorkspaceId || store.list()[0]?.id;
-              return id ? ctxFor(id) : undefined;
-            },
-            onChatPaired: (chatId) => {
-              const current = loadConfig();
-              if (current.telegram) {
-                current.telegram.allowedChatId = chatId;
-                saveConfig(current);
-              }
-            },
-          });
-          telegramService.start().catch(() => {});
+          telegramService = createTelegram(next.telegram.botToken, next.telegram.allowedChatId);
         } else if (telegramService) {
           telegramService.stop().catch(() => {});
           telegramService = null;
