@@ -55,6 +55,7 @@ const ROLES = {
   devops: [2, "#9a4a24", "#e57a1f", "#2d3240", "#2d3240", "cap"],
   "ui-ux": [0, "#e0603f", "#ef6fa6", "#2d3240", "#2d3240", "beret", true],
   reviewer: [1, "#7a8288", "#14a37f", "#2d3240", "#16161a", "glasses"],
+  explainer: [3, "#3a2a1c", "#f2b134", "#2d3240", "#2b7bc0", "clipboard", true],
   user: [0, "#7a4a2a", "#0f9d8a", "#2d3240", "#ffd166", "bow", true],
 };
 

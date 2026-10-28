@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { CATALOG_DIR, PACKAGE_LIBRARY } from "../src/config.ts";
 import { assemblePrompt, libraryRoots, loadRole, roleIds, roleProblems } from "../src/library.ts";
 
-const BASE = ["critic", "developer", "manager", "researcher"];
+const BASE = ["critic", "developer", "explainer", "manager", "researcher"];
 
 /** Run with a temporary app home so the user's real store installs don't leak into tests. */
 function withHome<T>(fn: (home: string) => T): T {
@@ -20,7 +20,7 @@ function withHome<T>(fn: (home: string) => T): T {
   }
 }
 
-test("package library has exactly the 4 base roles, with no problems", () => withHome(() => {
+test("package library has exactly the 5 base roles, with no problems", () => withHome(() => {
   assert.deepEqual(roleIds().sort(), BASE);
   for (const id of BASE) assert.deepEqual(roleProblems(loadRole(id)), [], id);
 }));
@@ -65,4 +65,11 @@ test("orchestrator prompt mentions handoff tool, cli prompt keeps HANDOFF block"
   assert.ok(!p.includes("Manager in orchestrated mode"), "manager-only rules leak to other roles");
   assert.ok(assemblePrompt("developer", "cli").includes("HANDOFF →"));
   assert.ok(assemblePrompt("manager", "orchestrator").includes("reply_checkpoint"));
+}));
+
+test("manager playbook hands build work to the explainer for a stakeholder overview", () => withHome(() => {
+  const p = assemblePrompt("manager", "orchestrator");
+  assert.match(p, /\| explainer \|/);
+  assert.match(p, /docs\/OVERVIEW\.md/);
+  assert.match(assemblePrompt("explainer", "orchestrator"), /```mermaid/);
 }));
