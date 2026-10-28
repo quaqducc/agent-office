@@ -272,7 +272,7 @@ export class CausalityDirector extends RoleWalkQueue {
     this.clear();
     if (el) {
       el.querySelectorAll(".actor").forEach(a => a.remove());
-      el.querySelectorAll(".desk.away").forEach(d => d.classList.remove("away"));
+      el.querySelectorAll(".desk.away, .user-spot.away").forEach(d => d.classList.remove("away"));
     }
   }
 

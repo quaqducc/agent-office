@@ -1,6 +1,7 @@
 // Wiring: workspaces, live SSE, history replay, rendering, menus and dialogs.
 import { Marked } from "/vendor/marked.js";
 import { createMarkdown } from "./markdown.js";
+import { watchDiagrams } from "./diagrams.js";
 import { api, subscribe } from "./api.js";
 import { initialState, mergeEvents, reduce } from "./state.js";
 import { cancelAllWalks, fit, pauseAllWalks, playEffect, renderOffice, resumeAllWalks } from "./office.js";
@@ -85,6 +86,7 @@ const editorViewer = createEditorViewer({
   editorViewEl: el.viewEditor,
   toast,
   ask,
+  renderMarkdown: md,
 });
 
 const explorerTree = createExplorerTree({
@@ -867,6 +869,120 @@ function initBottomPanelResizer() {
   });
 }
 initBottomPanelResizer();
+
+/** Pointer drag with capture: onMove gets every move, onEnd runs once on release. */
+function dragWith(e, target, onMove, onEnd, bodyCls = "") {
+  target.setPointerCapture?.(e.pointerId);
+  document.body.classList.add("dragging", ...(bodyCls ? [bodyCls] : []));
+  const up = () => {
+    target.removeEventListener("pointermove", onMove);
+    target.removeEventListener("pointerup", up);
+    target.removeEventListener("pointercancel", up);
+    document.body.classList.remove("dragging", ...(bodyCls ? [bodyCls] : []));
+    onEnd();
+  };
+  target.addEventListener("pointermove", onMove);
+  target.addEventListener("pointerup", up);
+  target.addEventListener("pointercancel", up);
+  e.preventDefault();
+}
+
+// Side chat: docked, its left edge drags to resize; popped out, it is a floating note (header moves it, corner resizes it).
+function initSideChatLayout() {
+  const chat = el.sideChat, resizer = $("#side-chat-resizer"), floatBtn = $("#side-chat-float");
+  const header = chat?.querySelector(".side-chat-header");
+  if (!chat || !resizer || !floatBtn || !header) return;
+  const load = k => { try { return JSON.parse(localStorageGet(k) ?? "null"); } catch { return null; } };
+  const maxW = () => Math.round(window.innerWidth * 0.7);
+  let dockedWidth = load("chat-width");
+  const float = { on: false, ...load("chat-float") };
+  const saveFloat = () => localStorageSet("chat-float", JSON.stringify(float));
+
+  const clampFloat = () => {
+    float.width = Math.min(Math.max(float.width ?? 380, 280), window.innerWidth - 16);
+    float.height = Math.min(Math.max(float.height ?? 520, 240), window.innerHeight - 16);
+    float.left = Math.min(Math.max(float.left ?? window.innerWidth - float.width - 24, 8), window.innerWidth - float.width - 8);
+    float.top = Math.min(Math.max(float.top ?? 80, 8), window.innerHeight - 48);
+  };
+  const apply = () => {
+    chat.classList.toggle("floating", float.on);
+    if (float.on) {
+      clampFloat();
+      Object.assign(chat.style, { left: `${float.left}px`, top: `${float.top}px`, width: `${float.width}px`, height: `${float.height}px` });
+    } else {
+      Object.assign(chat.style, { left: "", top: "", height: "", width: dockedWidth ? `${Math.min(dockedWidth, maxW())}px` : "" });
+    }
+    const label = float.on ? "Gắn lại cạnh phải" : "Tách ra cửa sổ nổi";
+    floatBtn.title = label;
+    floatBtn.setAttribute("aria-label", label);
+    floatBtn.classList.toggle("on", float.on);
+  };
+
+  floatBtn.addEventListener("click", () => {
+    float.on = !float.on;
+    apply();
+    saveFloat();
+  });
+
+  resizer.addEventListener("pointerdown", e => {
+    const startX = e.clientX, startW = chat.getBoundingClientRect().width;
+    resizer.classList.add("resizing");
+    dragWith(e, resizer, ev => {
+      dockedWidth = Math.round(Math.min(Math.max(startW + startX - ev.clientX, 280), maxW()));
+      chat.style.width = `${dockedWidth}px`;
+    }, () => {
+      resizer.classList.remove("resizing");
+      localStorageSet("chat-width", JSON.stringify(dockedWidth));
+    }, "col-resize");
+  });
+  resizer.addEventListener("dblclick", () => {
+    dockedWidth = null;
+    localStorageSet("chat-width", "null");
+    apply();
+  });
+
+  header.addEventListener("pointerdown", e => {
+    if (!float.on || e.target.closest("button")) return;
+    const dx = e.clientX - float.left, dy = e.clientY - float.top;
+    dragWith(e, header, ev => {
+      float.left = ev.clientX - dx;
+      float.top = ev.clientY - dy;
+      clampFloat();
+      chat.style.left = `${float.left}px`;
+      chat.style.top = `${float.top}px`;
+    }, saveFloat);
+  });
+
+  // The corner resize is native CSS `resize`, so read the size back from the element
+  new ResizeObserver(() => {
+    if (!float.on || chat.classList.contains("collapsed")) return;
+    const { offsetWidth: w, offsetHeight: h } = chat;
+    if (w && h && (w !== float.width || h !== float.height)) {
+      float.width = w;
+      float.height = h;
+      saveFloat();
+    }
+  }).observe(chat);
+  window.addEventListener("resize", apply);
+  apply();
+}
+initSideChatLayout();
+watchDiagrams();
+
+// Copy button on fenced code blocks (rendered by markdown.js); reads the <pre> text at click time
+document.addEventListener("click", async e => {
+  const btn = e.target.closest?.("[data-copy]");
+  if (!btn) return;
+  const text = (btn.nextElementSibling?.textContent ?? "").replace(/\n$/, "");
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "✓";
+  } catch {
+    btn.textContent = "✗";
+    toast("Không sao chép được vào clipboard", "bad");
+  }
+  setTimeout(() => (btn.textContent = "📋"), 1200);
+});
 
 function showCommandModal(cmd) {
   if (!el.commandModal) return;

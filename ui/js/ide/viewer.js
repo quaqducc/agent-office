@@ -30,6 +30,7 @@ export function createEditorViewer({
   toast,
   ask,
   onTabChange,
+  renderMarkdown,
 }) {
   let currentWorkspaceId = null;
   const openTabs = []; // { path, name, content, savedContent, sha256, mtime, size, isBinary, dirty, liveConflict, conflictDiskData }
@@ -378,6 +379,9 @@ export function createEditorViewer({
     }
 
     editorViewEl.innerHTML = "";
+    // Markdown opens rendered (with diagrams) so non-technical readers see the document, not its source
+    const canPreview = !!renderMarkdown && !tab.isBinary && /\.(md|markdown)$/i.test(tab.path);
+    const previewing = canPreview && tab.preview !== false;
 
     // Header
     const header = document.createElement("div");
@@ -387,12 +391,26 @@ export function createEditorViewer({
         <span>📄 <b>${escapeHtml(tab.path)}</b></span>
       </div>
       <div class="viewer-header-actions">
+        ${canPreview ? `<button type="button" class="btn small viewer-header-btn" id="viewer-preview-btn">${previewing ? "Xem mã" : "Xem trước"}</button>` : ""}
         ${tab.dirty ? `<button type="button" class="btn small primary viewer-header-btn" id="viewer-save-btn">Lưu (Ctrl+S)</button>` : ""}
         <span class="viewer-meta">${formatSize(tab.size)} · ${new Date(tab.mtime).toLocaleString("vi-VN")}</span>
       </div>
     `;
     header.querySelector("#viewer-save-btn")?.addEventListener("click", () => saveTab(tab));
+    header.querySelector("#viewer-preview-btn")?.addEventListener("click", () => {
+      tab.preview = !previewing;
+      renderEditor(tab);
+    });
     editorViewEl.appendChild(header);
+
+    if (previewing) {
+      const preview = document.createElement("div");
+      preview.className = "viewer-preview md";
+      // YAML front matter is metadata, not part of the document a reader should see
+      preview.innerHTML = renderMarkdown(tab.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, ""));
+      editorViewEl.appendChild(preview);
+      return;
+    }
 
     // Binary warning
     if (tab.isBinary) {

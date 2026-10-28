@@ -1208,6 +1208,46 @@ h1, h2, h3 { margin: 0; }
 .side-chat.collapsed {
   display: none;
 }
+.side-chat { position: relative; }
+.side-chat-resizer {
+  position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; z-index: 20;
+  cursor: col-resize; background: transparent; transition: background-color .15s; touch-action: none;
+}
+.side-chat-resizer:hover, .side-chat-resizer.resizing { background: var(--accent); }
+body.dragging { user-select: none; }
+body.dragging .side-chat { transition: none; }
+body.dragging.col-resize { cursor: col-resize; }
+/* Floating "sticky note": header drags it, bottom-right corner resizes it (native CSS resize) */
+.side-chat.floating {
+  position: fixed; z-index: 60; min-width: 280px; min-height: 240px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); resize: both; transition: none;
+}
+.side-chat.floating .side-chat-resizer { display: none; }
+.side-chat.floating .side-chat-header { cursor: move; touch-action: none; }
+.side-chat-header .icon-btn.small { margin-left: auto; }
+.side-chat-header .icon-btn.small + .icon-btn.small { margin-left: 4px; }
+#side-chat-float.on { color: var(--accent); border-color: var(--accent); }
+/* Copy button on fenced code blocks in rendered Markdown */
+.code-block { position: relative; }
+.code-block pre { padding-right: 40px; }
+.code-block .copy-btn {
+  position: absolute; top: 6px; right: 6px; padding: 2px 6px; font-size: 12px; line-height: 1.4;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; opacity: .6;
+}
+.code-block:hover .copy-btn, .code-block .copy-btn:focus-visible { opacity: 1; }
+/* Mermaid diagrams (diagrams.js): drawing replaces the source once it renders; source stays on error */
+.mermaid-block { position: relative; margin: 8px 0; }
+.mermaid-block .copy-btn {
+  position: absolute; top: 6px; right: 6px; z-index: 1; padding: 2px 6px; font-size: 12px; line-height: 1.4;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; opacity: .6;
+}
+.mermaid-block:hover .copy-btn { opacity: 1; }
+.mermaid-svg { overflow: auto; padding: 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel); text-align: center; }
+.mermaid-svg svg { max-width: 100%; height: auto; }
+.mermaid-block[data-rendered="ok"] > pre { display: none; }
+.mermaid-error { margin: 4px 0 0; font-size: 12px; color: var(--approval-ink, #b42318); }
+/* Rendered Markdown preview in the file viewer */
+.viewer-preview { flex: 1; min-height: 0; overflow: auto; padding: 20px 28px; max-width: 980px; line-height: 1.6; }
 .side-chat-header {
   height: 36px;
   min-height: 36px;
@@ -1365,7 +1405,10 @@ h1, h2, h3 { margin: 0; }
 .desk.away .char,
 .desk.away .halo,
 .desk.away .badge,
-.desk.away .bubble {
+.desk.away .bubble,
+.user-spot.away .char,
+.user-spot.away .halo,
+.user-spot.away .bubble {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;

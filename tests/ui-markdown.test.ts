@@ -30,3 +30,17 @@ test("tables and emphasis still render", () => {
   assert.match(out, /<strong>bold<\/strong>/);
   assert.match(out, /<table>/);
 });
+
+test("fenced code blocks get a copy button, inline code does not", () => {
+  const out = md("run `npm start` then:\n\n```bash\nnpm run build && echo \"<ok>\"\n```");
+  assert.equal((out.match(/data-copy/g) ?? []).length, 1, out);
+  assert.match(out, /<pre><code class="language-bash">npm run build &amp;&amp; echo &quot;&lt;ok&gt;&quot;\n?<\/code><\/pre>/);
+});
+
+test("mermaid blocks become diagram placeholders with their escaped source kept for the renderer", () => {
+  const out = md("```mermaid\nflowchart LR\n  A[\"<b>x</b>\"] --> B\n```");
+  assert.match(out, /<div class="mermaid-block" data-mermaid>/);
+  assert.match(out, /data-copy/);
+  assert.match(out, /A\[&quot;&lt;b&gt;x&lt;\/b&gt;&quot;\] --&gt; B/);
+  assert.ok(!/<b>x/.test(out), out);
+});

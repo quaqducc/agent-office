@@ -23,3 +23,4 @@ Runtime dependencies (installed by npm, not vendored): `@earendil-works/pi-codin
 
 Vendored web client libraries:
 - `ui/vendor/prism.js` & `ui/vendor/prism.css`: PrismJS (v1.29.0) — MIT License, Copyright (c) 2012 Lea Verou and Prism contributors (https://prismjs.com/).
+- `ui/vendor/mermaid.min.js`: Mermaid (v12.2.0) — MIT License, Copyright (c) 2014 - 2022 Knut Sveidqvist (https://mermaid.js.org/). Loaded only when a page shows a diagram.
