@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0 — 2026-10-28
+
+- **Tài liệu cho người non-tech: role mới Explainer (Thuyết minh)**:
+  - Role cơ bản thứ 5, có sẵn trong mọi văn phòng (phòng mặc định xếp ở khu "Chuyên gia"; thêm vào template Startup MVP và Software House).
+  - Viết và cập nhật `docs/OVERVIEW.md` bằng ngôn ngữ dễ hiểu: tóm tắt, sơ đồ cách app hoạt động, sơ đồ các thành phần, quy trình làm việc của nhóm, tiến độ và cách chạy thử — để người yêu cầu, đồng nghiệp và đối tác (kể cả người không rành kỹ thuật) theo dõi được.
+  - Manager tự giao việc cho Explainer khi nhóm xây hoặc sửa lớn một sản phẩm (cuối quá trình, và ngay từ bản kế hoạch nếu việc kéo dài), rồi báo người dùng tài liệu đã sẵn sàng để chia sẻ.
+- **Sơ đồ Mermaid hiển thị thành hình vẽ** trong khung chat, kết quả task và trình xem file. Thư viện (Mermaid 12.2.0, đóng gói sẵn, chạy offline) chỉ tải khi trang có sơ đồ; sơ đồ sai cú pháp hiện mã gốc kèm cảnh báo.
+- **Xem trước file Markdown** trong trình xem file: `.md` mở dạng đã định dạng (kèm sơ đồ), nút `Xem mã` / `Xem trước` để chuyển qua lại.
+- **Khung "Trò chuyện Manager"**:
+  - Kéo mép trái để phóng to / thu nhỏ (tối đa 70% màn hình), nhấp đúp để về mặc định; nhớ độ rộng.
+  - Nút `Tách ra` biến khung chat thành cửa sổ nổi kiểu sticky note: kéo thanh tiêu đề để di chuyển, kéo góc để đổi kích thước, nút `Gắn lại` để đưa về cạnh phải; nhớ vị trí và kích thước.
+  - Nút 📋 sao chép trên mọi khối lệnh / khối code trong tin nhắn.
+- **Telegram chia theo workspace**:
+  - Lệnh `/workspace` hiện danh sách nút chọn workspace nhận tin nhắn (✅ đánh dấu workspace đang chọn); lựa chọn được lưu lại.
+  - Mọi tin bot gửi đều ghi tên workspace: câu trả lời `[Tên] Manager`, checkpoint có dòng `Workspace`, xác nhận gửi tin `Đã chuyển đến Manager [Tên]`; `/status` cho biết workspace đang chọn.
+  - Sửa lỗi nút Duyệt / Từ chối gửi quyết định nhầm sang workspace mặc định; nút giờ mang theo workspace của checkpoint. Checkpoint đã xử lý thì bot báo rõ thay vì im lặng.
+  - Nút bấm chỉ nhận từ chat đã ghép đôi; workspace đã chọn bị xoá thì bot giữ tin lại và nhắc chọn lại; lỗi khi xử lý được báo trên chat và ghi log thay vì bị nuốt.
+- **Sửa lỗi**:
+  - Nhân vật "Bạn" để lại một bản tại chỗ khi đi sang bàn khác.
+  - `agent-company shortcut` tạo lối tắt vào thư mục Desktop thật (kể cả khi Desktop được OneDrive chuyển hướng hoặc có tên tiếng Việt như "Máy tính"), thay vì `%USERPROFILE%\Desktop` cố định.
+
 ## 0.2.5 — 2026-10-24
 
 - **Tab Telegram trong giao diện Cài đặt (Settings UI)**:

@@ -1,17 +1,43 @@
 {
   "name": "@quaqduc/agent-company",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "An AI team (Manager, Researcher, Developer, Critic, and more on demand) working in a 2D pixel office. Bring any OpenAI-, Anthropic- or Gemini-compatible API.",
-  "keywords": ["ai", "agents", "multi-agent", "llm", "pixel-art", "pi"],
+  "keywords": [
+    "ai",
+    "agents",
+    "multi-agent",
+    "llm",
+    "pixel-art",
+    "pi"
+  ],
   "license": "MIT",
   "author": "Quang Duc",
   "homepage": "https://github.com/quaqducc/agent-office#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/quaqducc/agent-office.git" },
-  "bugs": { "url": "https://github.com/quaqducc/agent-office/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quaqducc/agent-office.git"
+  },
+  "bugs": {
+    "url": "https://github.com/quaqducc/agent-office/issues"
+  },
   "type": "module",
-  "bin": { "agent-company": "bin/agent-company.js" },
-  "files": ["bin", "dist", "ui", "library", "catalog/index.json", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"],
-  "engines": { "node": ">=22.19.0" },
+  "bin": {
+    "agent-company": "bin/agent-company.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "ui",
+    "library",
+    "catalog/index.json",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "prepack": "npm run build",
